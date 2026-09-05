@@ -61,7 +61,7 @@ export default function SignUpModal({ onClose, onSuccess }) {
             type="submit"
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition"
           >
-            Save & Continue to Payment
+            Save & Continue to Take Exam
           </button>
         </form>
       </div>
