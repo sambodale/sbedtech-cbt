@@ -1,4 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import parse from 'html-react-parser';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 
 export default function QuestionCard({ subject, mode, questions, onEndExam }) {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -23,6 +26,23 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
     );
   }
 
+  // Helper to render HTML strings and mathematical expressions securely
+  const renderFormattedContent = (content) => {
+    if (!content) return '';
+    let strContent = String(content);
+
+    // Parse inline KaTeX math if string contains LaTeX indicators like $ or \
+    strContent = strContent.replace(/\$(.*?)\$/g, (_, match) => {
+      try {
+        return katex.renderToString(match, { throwOnError: false });
+      } catch (e) {
+        return match;
+      }
+    });
+
+    return parse(strContent);
+  };
+
   // Normalize options list
   const rawOptions = currentQuestion.options || {};
   let optionEntries = [];
@@ -43,7 +63,6 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
     }));
   };
 
-  // Submit Exam Logic
   const handleSubmitExam = () => {
     let score = 0;
     const detailedSummary = questions.map((q, idx) => {
@@ -76,7 +95,6 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
       summary: detailedSummary,
     };
 
-    // Save to Exam History in LocalStorage
     const existingHistory = JSON.parse(localStorage.getItem('sbedtech_exam_history') || '[]');
     localStorage.setItem('sbedtech_exam_history', JSON.stringify([resultData, ...existingHistory]));
 
@@ -84,7 +102,7 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
     setIsSubmitted(true);
   };
 
-  // --- 1. RESULT SUMMARY SCREEN ---
+  // --- RESULT SCREEN ---
   if (isSubmitted && !showReview) {
     return (
       <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl border border-slate-200 p-8 text-center animate-in fade-in duration-200">
@@ -92,7 +110,9 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
           {examResult.percentage}%
         </div>
         <h2 className="text-2xl font-bold text-slate-800">Exam Completed!</h2>
-        <p className="text-slate-500 text-sm mt-1">Here is a quick summary of your performance in <strong>{subject}</strong>.</p>
+        <p className="text-slate-500 text-sm mt-1">
+          Here is a quick summary of your performance in <strong>{subject}</strong>.
+        </p>
 
         <div className="grid grid-cols-3 gap-4 my-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
           <div>
@@ -127,7 +147,7 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
     );
   }
 
-  // --- 2. DETAILED REVIEW SCREEN (MISSED QUESTIONS) ---
+  // --- DETAILED REVIEW SCREEN ---
   if (isSubmitted && showReview) {
     return (
       <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl border border-slate-200 p-6 sm:p-8">
@@ -165,7 +185,9 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
                 </span>
               </div>
 
-              <p className="text-slate-800 font-medium mb-3">{item.question}</p>
+              <div className="text-slate-800 font-medium mb-3">
+                {renderFormattedContent(item.question)}
+              </div>
 
               <div className="text-xs space-y-1 text-slate-600 mb-3">
                 <p>
@@ -182,10 +204,9 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
                 )}
               </div>
 
-              {/* Explanation Block */}
               <div className="mt-3 p-3 bg-white/80 rounded-lg border border-slate-200 text-xs text-slate-700">
                 <p className="font-semibold text-slate-900 mb-1">Explanation:</p>
-                <p>{item.explanation}</p>
+                <div>{renderFormattedContent(item.explanation)}</div>
               </div>
             </div>
           ))}
@@ -194,7 +215,7 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
     );
   }
 
-  // --- 3. ACTIVE EXAM TAKING VIEW ---
+  // --- QUESTION TAKING VIEW ---
   return (
     <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-lg border border-slate-200 p-6 sm:p-8">
       <div className="flex justify-between items-center border-b pb-4 mb-6">
@@ -214,12 +235,31 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
         </button>
       </div>
 
-      <div className="mb-6">
-        <p className="text-lg font-medium text-slate-800 leading-relaxed">
-          {currentQuestion.question}
-        </p>
+      {/* Render Instruction / Comprehension Passage if available */}
+      {currentQuestion.section && (
+        <div className="mb-4 p-4 bg-amber-50/60 border border-amber-200/80 rounded-xl text-xs text-amber-900 leading-relaxed">
+          <p className="font-bold mb-1 uppercase tracking-wider">Instruction / Passage:</p>
+          <div>{renderFormattedContent(currentQuestion.section)}</div>
+        </div>
+      )}
+
+      {/* Question Text & Embedded Diagrams */}
+      <div className="mb-6 text-lg font-medium text-slate-800 leading-relaxed">
+        {renderFormattedContent(currentQuestion.question)}
       </div>
 
+      {/* Render Image Diagram if given as separate field */}
+      {currentQuestion.image && (
+        <div className="mb-6 flex justify-center">
+          <img
+            src={currentQuestion.image}
+            alt="Question Diagram"
+            className="max-h-64 object-contain rounded-lg border border-slate-200 shadow-sm"
+          />
+        </div>
+      )}
+
+      {/* Options List */}
       <div className="space-y-3 mb-8">
         {optionEntries.map(([key, value]) => {
           const isSelected = selectedAnswers[currentIndex] === key;
@@ -241,12 +281,13 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
               >
                 {key}
               </span>
-              <span className="text-base">{value}</span>
+              <span className="text-base">{renderFormattedContent(value)}</span>
             </button>
           );
         })}
       </div>
 
+      {/* Controls */}
       <div className="flex justify-between items-center pt-4 border-t">
         <button
           type="button"
