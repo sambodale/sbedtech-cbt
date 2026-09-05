@@ -5,33 +5,12 @@ import SignUpModal from './components/SignUpModal';
 
 const QuestionCard = lazy(() => import('./components/QuestionCard'));
 
-// Fallback test question bank in case API requests fail or go offline
-const MOCK_QUESTIONS = {
-  mathematics: [
-    {
-      id: 'local-1',
-      question: 'Solve for x: 2x + 5 = 15',
-      options: ['A) x = 5', 'B) x = 10', 'C) x = 7.5', 'D) x = 2'],
-      answer: 'Option A',
-      explanation: '2x = 15 - 5 => 2x = 10 => x = 5.'
-    }
-  ],
-  english: [
-    {
-      id: 'local-2',
-      question: 'Choose the option opposite in meaning to "PERMANENT":',
-      options: ['A) Temporary', 'B) Lasting', 'C) Durable', 'D) Constant'],
-      answer: 'Option A',
-      explanation: 'Temporary means lasting for only a limited period of time.'
-    }
-  ]
-};
-
 export default function App() {
   const [userProfile, setUserProfile] = useState(null);
   const [isActivated, setIsActivated] = useState(false);
   const [showSignUp, setShowSignUp] = useState(false);
   
+  const [pendingAction, setPendingAction] = useState(null);
   const [activeSubject, setActiveSubject] = useState('');
   const [examMode, setExamMode] = useState('practice');
   const [questions, setQuestions] = useState([]);
@@ -51,36 +30,29 @@ export default function App() {
     }
   }, []);
 
-  // Save new registration profile
+  // Save new registration profile & trigger pending action if present
   const handleSaveProfile = (profileData) => {
     setUserProfile(profileData);
     localStorage.setItem('sbedtech_user', JSON.stringify(profileData));
     setShowSignUp(false);
+
+    // If candidate clicked a subject before registering, launch that exam automatically
+    if (pendingAction && pendingAction.type === 'startExam') {
+      const { params } = pendingAction;
+      setPendingAction(null);
+      fetchExamQuestions(params);
+    }
   };
 
-  // Launch Activation / Paystack Modal
-  const handleOpenActivation = () => {
-    if (!userProfile) {
-      setShowSignUp(true);
-      return;
-    }
-    alert("Redirecting to Paystack payment gateway for Exam Mode activation...");
-  };
-
-  // Handle starting exam with ALOC/SDASH provider API
-  const handleStartExam = async ({ subject, year, mode, limit, durationInMinutes }) => {
-    if (!userProfile) {
-      setShowSignUp(true);
-      return;
-    }
-
+  // Direct fetch call for ALOC/SDASH provider endpoint
+  const fetchExamQuestions = async ({ subject, year, mode, limit }) => {
     setLoading(true);
     setActiveSubject(subject);
-    setExamMode(mode);
+    setExamMode(mode || 'practice');
 
     try {
       const response = await fetch(
-        `/api/get-questions?subject=${encodeURIComponent(subject)}&year=${encodeURIComponent(year)}&limit=${limit}`
+        `/api/get-questions?subject=${encodeURIComponent(subject)}&year=${encodeURIComponent(year || 'random')}&limit=${limit || 40}`
       );
 
       if (response.ok) {
@@ -88,21 +60,35 @@ export default function App() {
         if (result && result.data && result.data.length > 0) {
           setQuestions(result.data);
           setExamStarted(true);
-          setLoading(false);
           return;
         }
       }
-      throw new Error('API request failed or returned empty question dataset.');
+      throw new Error('No questions returned from upstream provider.');
     } catch (error) {
-      console.warn('API error encountered. Falling back to local dataset:', error.message);
-      
-      const key = subject.toLowerCase();
-      const localBank = MOCK_QUESTIONS[key] || MOCK_QUESTIONS['mathematics'];
-      setQuestions(localBank);
-      setExamStarted(true);
+      console.error('Error fetching questions:', error);
+      alert('Could not fetch questions from the server. Please verify network connectivity and try again.');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Triggered from HomeScreen when selecting a subject/year
+  const handleStartExam = ({ subject, year, mode, limit }) => {
+    if (!userProfile) {
+      setPendingAction({ type: 'startExam', params: { subject, year, mode, limit } });
+      setShowSignUp(true);
+      return;
+    }
+
+    fetchExamQuestions({ subject, year, mode, limit });
+  };
+
+  const handleOpenActivation = () => {
+    if (!userProfile) {
+      setShowSignUp(true);
+      return;
+    }
+    alert('Redirecting to payment gateway for Exam Mode activation...');
   };
 
   const handleEndExam = () => {
@@ -124,7 +110,7 @@ export default function App() {
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
             <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             <p className="text-slate-600 font-semibold text-sm">
-              Fetching questions from ALOC & SDASH Servers...
+              Fetching questions from ALOC & SDASH APIs...
             </p>
           </div>
         ) : !examStarted ? (
@@ -151,7 +137,7 @@ export default function App() {
         )}
       </main>
 
-      {/* SignUp / Candidate Profile Modal */}
+      {/* Candidate Profile / Sign Up Modal */}
       {showSignUp && (
         <SignUpModal
           onClose={() => setShowSignUp(false)}
