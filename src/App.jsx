@@ -2,6 +2,7 @@ import React, { useState, useEffect, lazy, Suspense } from 'react';
 import Header from './components/Header';
 import HomeScreen from './components/HomeScreen';
 import SignUpModal from './components/SignUpModal';
+import ExamHistoryModal from './components/ExamHistoryModal';
 
 const QuestionCard = lazy(() => import('./components/QuestionCard'));
 
@@ -9,6 +10,7 @@ export default function App() {
   const [userProfile, setUserProfile] = useState(null);
   const [isActivated, setIsActivated] = useState(false);
   const [showSignUp, setShowSignUp] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
   
   const [pendingAction, setPendingAction] = useState(null);
   const [activeSubject, setActiveSubject] = useState('');
@@ -34,7 +36,6 @@ export default function App() {
     }
   }, []);
 
-  // Save profile created from SignUpModal and trigger pending exam if queued
   const handleSaveProfile = (profileData) => {
     setUserProfile(profileData);
     localStorage.setItem('sbedtech_user', JSON.stringify(profileData));
@@ -47,7 +48,6 @@ export default function App() {
     }
   };
 
-  // Fetch questions from API and normalize option key-value pairs
   const fetchExamQuestions = async ({ subject, year, mode, limit }) => {
     setLoading(true);
     setActiveSubject(subject);
@@ -62,11 +62,9 @@ export default function App() {
         const result = await response.json();
         
         if (result && result.data && result.data.length > 0) {
-          // Normalize options so QuestionCard receives a uniform format regardless of API provider
           const formattedQuestions = result.data.map((q) => {
             let options = q.option || q.options || {};
 
-            // Normalize flat keys (e.g. optionA, optionB) or nested option objects
             if (typeof options === 'object' && !Array.isArray(options)) {
               options = {
                 a: options.a || q.optionA || q.a || '',
@@ -98,7 +96,6 @@ export default function App() {
     }
   };
 
-  // Triggered from HomeScreen when candidate selects an exam
   const handleStartExam = ({ subject, year, mode, limit }) => {
     if (!userProfile) {
       setPendingAction({ type: 'startExam', params: { subject, year, mode, limit } });
@@ -129,6 +126,7 @@ export default function App() {
         isActivated={isActivated}
         onOpenSignUp={() => setShowSignUp(true)}
         onOpenActivation={handleOpenActivation}
+        onOpenHistory={() => setShowHistoryModal(true)}
       />
 
       <main className="container mx-auto px-4 py-6">
@@ -146,6 +144,7 @@ export default function App() {
             onStartExam={handleStartExam}
             onOpenSignUp={() => setShowSignUp(true)}
             onOpenActivation={handleOpenActivation}
+            onOpenHistory={() => setShowHistoryModal(true)}
           />
         ) : (
           <Suspense
@@ -170,6 +169,13 @@ export default function App() {
         <SignUpModal
           onClose={() => setShowSignUp(false)}
           onSave={handleSaveProfile}
+        />
+      )}
+
+      {/* Exam History Modal */}
+      {showHistoryModal && (
+        <ExamHistoryModal
+          onClose={() => setShowHistoryModal(false)}
         />
       )}
     </div>
