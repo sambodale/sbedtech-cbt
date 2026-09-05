@@ -1,334 +1,233 @@
 import React, { useState } from 'react';
 
-const AVAILABLE_SUBJECTS = [
-  { id: 'english', name: 'Use of English', icon: '📖' },
-  { id: 'mathematics', name: 'Mathematics', icon: '📐' },
-  { id: 'physics', name: 'Physics', icon: '⚡' },
-  { id: 'chemistry', name: 'Chemistry', icon: '🧪' },
-  { id: 'biology', name: 'Biology', icon: '🧬' },
-  { id: 'government', name: 'Government', icon: '🏛️' },
-  { id: 'economics', name: 'Economics', icon: '📊' },
-  { id: 'commerce', name: 'Commerce', icon: '💼' },
-];
+export default function HomeScreen({ userProfile, isActivated, onStartExam, onOpenSignUp, onOpenActivation }) {
+  const [selectedSubject, setSelectedSubject] = useState('Use of English');
+  const [selectedYear, setSelectedYear] = useState('Random');
+  const [mode, setMode] = useState('practice');
+  const [hours, setHours] = useState(1);
+  const [minutes, setMinutes] = useState(30);
+  const [totalQuestions, setTotalQuestions] = useState(40);
+  const [isSettingUp, setIsSettingUp] = useState(false);
 
-export default function HomeScreen({
-  isActivated = false,
-  user = null,
-  onSignUp,
-  onStartSession,
-  onTriggerActivation,
-}) {
-  const [selectedMode, setSelectedMode] = useState('practice');
-  const [selectedSubjects, setSelectedSubjects] = useState(['english', 'mathematics']);
-  const [showSignUpModal, setShowSignUpModal] = useState(false);
-  const [pendingAction, setPendingAction] = useState(null);
+  // Subject List
+  const subjects = [
+    { name: 'Use of English', icon: '📖' },
+    { name: 'Mathematics', icon: '📐' },
+    { name: 'Physics', icon: '⚡' },
+    { name: 'Chemistry', icon: '🧪' },
+    { name: 'Biology', icon: '🧬' },
+    { name: 'Economics', icon: '📚' },
+    { name: 'Geography', icon: '🗺️' },
+    { name: 'Agricultural Science', icon: '🌱' },
+    { name: 'Financial Accounting', icon: '📊' },
+    { name: 'Commerce', icon: '🏢' },
+    { name: 'Literature in English', icon: '🎭' },
+    { name: 'Yoruba', icon: '🗣️' },
+    { name: 'Government', icon: '🏛️' },
+    { name: 'CRS', icon: '✝️' },
+    { name: 'IRS', icon: '☪️' },
+  ];
 
-  const [fullName, setFullName] = useState('');
-  const [username, setUsername] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
+  // Generates array of years from 2026 down to 2005
+  const years = ['Random', ...Array.from({ length: 2026 - 2005 + 1 }, (_, i) => (2026 - i).toString())];
 
-  // Handle toggling subject cards
-  const toggleSubject = (subjectId) => {
-    if (!user) {
-      setPendingAction('start');
-      setShowSignUpModal(true);
+  const handleSubjectSelect = (subjectName) => {
+    if (!userProfile) {
+      onOpenSignUp();
       return;
     }
-
-    if (selectedSubjects.includes(subjectId)) {
-      if (selectedSubjects.length === 1) return;
-      setSelectedSubjects(selectedSubjects.filter((id) => id !== subjectId));
-    } else {
-      if (selectedSubjects.length >= 4) {
-        alert('You can select a maximum of 4 subjects.');
-        return;
-      }
-      setSelectedSubjects([...selectedSubjects, subjectId]);
-    }
+    setSelectedSubject(subjectName);
+    setIsSettingUp(true);
   };
 
-  // Handle mode selection click
-  const handleSelectMode = (mode) => {
-    if (!user) {
-      setPendingAction('start');
-      setShowSignUpModal(true);
+  const handleStartExamSubmit = () => {
+    if (!userProfile) {
+      onOpenSignUp();
       return;
     }
 
-    if (mode === 'exam' && !isActivated) {
-      alert('Exam Mode requires full app activation.');
-      return;
-    }
+    const durationInMinutes = Number(hours) * 60 + Number(minutes);
 
-    setSelectedMode(mode);
-  };
-
-  // Main Start Practice Button
-  const handleStart = () => {
-    if (!user) {
-      setPendingAction('start');
-      setShowSignUpModal(true);
-      return;
-    }
-
-    if (selectedMode === 'exam' && !isActivated) {
-      alert('Exam Mode requires full app activation. Please activate below.');
-      return;
-    }
-
-    onStartSession({
-      mode: selectedMode,
-      subjects: selectedSubjects,
+    onStartExam({
+      subject: selectedSubject.toLowerCase(),
+      year: selectedYear,
+      mode,
+      limit: Number(totalQuestions),
+      durationInMinutes
     });
   };
 
-  // Activation Button Click
-  const handleActivateClick = () => {
-    if (!user) {
-      setPendingAction('activate');
-      setShowSignUpModal(true);
-      return;
-    }
-    onTriggerActivation(user);
-  };
-
-  // Handle Sign-Up Form Submit
-  const handleSignUpSubmit = (e) => {
-    e.preventDefault();
-
-    const formattedUsername = username.trim().toLowerCase();
-    if (!formattedUsername) {
-      alert('Please enter a valid unique username.');
-      return;
-    }
-
-    const userData = {
-      fullName: fullName.trim(),
-      username: formattedUsername,
-      phone: phone.trim(),
-      email: email.trim(),
-    };
-
-    onSignUp(userData);
-    setShowSignUpModal(false);
-
-    if (pendingAction === 'activate') {
-      onTriggerActivation(userData);
-    } else {
-      onStartSession({
-        mode: selectedMode,
-        subjects: selectedSubjects,
-      });
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col items-center justify-center p-4">
-      {/* Top Banner */}
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6 text-center">
-        <h1 className="text-3xl font-extrabold text-blue-700 tracking-tight">SbedTech CBT Portal</h1>
-
-        {user ? (
-          <div className="mt-2 flex items-center justify-center gap-3">
-            <h2 className="text-lg font-bold text-slate-800">
-              Welcome, <span className="text-blue-600">@{user.username}</span>! 👋
-            </h2>
-            <button
-              type="button"
-              onClick={() => {
-                localStorage.removeItem('sbedtech_cbt_user');
-                window.location.reload();
-              }}
-              className="text-xs text-red-500 hover:underline font-semibold"
-            >
-              (Clear Profile)
-            </button>
-          </div>
-        ) : (
-          <p className="text-slate-500 text-sm mt-1">
-            First-time user? Click below or select any subject to register your profile.
-          </p>
-        )}
-
-        {!isActivated && (
-          <div className="mt-4 inline-flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 px-3 py-1.5 rounded-full text-xs font-medium">
-            <span>⚡ Trial Access: 20 Practice Questions available</span>
-          </div>
-        )}
+    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6 font-sans">
+      {/* Banner */}
+      <div className="bg-white border border-slate-200 rounded-3xl p-8 text-center shadow-sm space-y-3">
+        <h1 className="text-3xl font-black text-blue-600">SbedTech CBT Portal</h1>
+        <p className="text-slate-500 text-sm font-medium">
+          {!userProfile
+            ? "First-time user? Click below or select any subject to register your profile."
+            : `Welcome back, ${userProfile.fullName || userProfile.name || 'Candidate'}! Select a subject to configure your setup.`}
+        </p>
       </div>
 
-      {/* Mode & Subject Selection */}
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
-        <div>
-          <label className="block text-sm font-bold text-slate-700 mb-2">Select Mode</label>
-          <div className="grid grid-cols-2 gap-4 items-start">
-            <button
-              type="button"
-              onClick={() => handleSelectMode('practice')}
-              className={`p-4 rounded-xl border text-left transition-all ${
-                selectedMode === 'practice'
-                  ? 'border-blue-600 bg-blue-50/50 ring-2 ring-blue-600/20'
-                  : 'border-slate-200 bg-white hover:border-slate-300'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-800">Practice Mode</span>
-                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-semibold">Unlocked</span>
-              </div>
-              <p className="text-xs text-slate-500 mt-1">Instant answer corrections & explanations.</p>
-            </button>
-
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={() => handleSelectMode('exam')}
-                className={`w-full p-4 rounded-xl border text-left transition-all ${
-                  selectedMode === 'exam'
-                    ? 'border-blue-600 bg-blue-50/50 ring-2 ring-blue-600/20'
-                    : 'border-slate-200 bg-white opacity-75 hover:opacity-100'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-800">Exam Mode</span>
-                  {!isActivated ? (
-                    <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-semibold">🔒 Locked</span>
-                  ) : (
-                    <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-semibold">Unlocked</span>
-                  )}
-                </div>
-                <p className="text-xs text-slate-500 mt-1">Timed simulation without live corrections.</p>
-              </button>
-
-              {!isActivated && (
-                <button
-                  type="button"
-                  onClick={handleActivateClick}
-                  className="w-full py-2.5 px-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs shadow-md transition flex items-center justify-center gap-1"
-                >
-                  <span>⚡ Activate App (1-Year Access)</span>
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Subjects Grid */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="block text-sm font-bold text-slate-700">
-              Select Subjects ({selectedSubjects.length}/4)
-            </label>
-            <span className="text-xs text-slate-400">Pick up to 4 subjects</span>
+      {!isSettingUp ? (
+        /* STEP 1: Main Subject Grid View */
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-5">
+          <div className="flex justify-between items-center">
+            <h2 className="text-sm font-bold text-slate-800">Select Subject to Begin</h2>
+            <span className="text-xs text-slate-400">Click any subject to open CBT Setup</span>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {AVAILABLE_SUBJECTS.map((subject) => {
-              const isSelected = selectedSubjects.includes(subject.id);
-              return (
-                <button
-                  key={subject.id}
-                  type="button"
-                  onClick={() => toggleSubject(subject.id)}
-                  className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center gap-1 ${
-                    isSelected
-                      ? 'border-blue-600 bg-blue-600 text-white font-semibold shadow-sm'
-                      : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-                  }`}
-                >
-                  <span className="text-xl">{subject.icon}</span>
-                  <span className="text-xs">{subject.name}</span>
-                </button>
-              );
-            })}
+            {subjects.map((sub) => (
+              <button
+                key={sub.name}
+                type="button"
+                onClick={() => handleSubjectSelect(sub.name)}
+                className="p-4 rounded-2xl border border-slate-100 bg-slate-50/50 hover:border-blue-500 hover:bg-blue-50/30 text-slate-700 transition flex flex-col items-center justify-center gap-2 group"
+              >
+                <span className="text-2xl group-hover:scale-110 transition-transform">{sub.icon}</span>
+                <span className="text-xs font-bold text-center">{sub.name}</span>
+              </button>
+            ))}
           </div>
         </div>
+      ) : (
+        /* STEP 2: CBT Setup View with Inline Subject Dropdown & Year Selection */
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
+          <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">CBT Setup</span>
+              <h2 className="text-xl font-bold text-slate-900">{selectedSubject}</h2>
+            </div>
 
-        {/* Start Button */}
-        <button
-          type="button"
-          onClick={handleStart}
-          className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-600/20 transition-all text-base"
-        >
-          {user ? 'Start Practice Session' : 'Sign Up to Start Practice'}
-        </button>
-      </div>
-
-      {/* Sign Up Modal */}
-      {showSignUpModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
-            <h3 className="text-xl font-extrabold text-slate-900">Create Profile</h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Please complete registration to access practice tests and full features.
-            </p>
-
-            <form onSubmit={handleSignUpSubmit} className="mt-4 space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. John Doe"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Unique Username *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. johndoe123"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Phone Number *</label>
-                <input
-                  type="tel"
-                  required
-                  placeholder="e.g. 08012345678"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Email Address *</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="e.g. student@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-3">
-                <button
-                  type="button"
-                  onClick={() => setShowSignUpModal(false)}
-                  className="w-1/2 py-2.5 text-slate-600 border border-slate-300 rounded-lg text-sm font-semibold hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="w-1/2 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 shadow-md"
-                >
-                  Complete Sign Up
-                </button>
-              </div>
-            </form>
+            {/* Subject Selector Dropdown */}
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-bold text-slate-500">Subject:</label>
+              <select
+                value={selectedSubject}
+                onChange={(e) => setSelectedSubject(e.target.value)}
+                className="bg-slate-50 border border-slate-200 text-slate-800 font-bold text-sm rounded-xl px-3 py-2 outline-none focus:border-blue-500 cursor-pointer"
+              >
+                {subjects.map((s) => (
+                  <option key={s.name} value={s.name}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
+
+          {/* Mode Selector */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+              Select Mode:
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div
+                onClick={() => setMode('practice')}
+                className={`cursor-pointer rounded-2xl p-4 border-2 transition-all ${
+                  mode === 'practice'
+                    ? 'border-blue-500 bg-blue-50/30'
+                    : 'border-slate-100 bg-slate-50/50 hover:border-slate-200'
+                }`}
+              >
+                <div className="flex justify-between items-center mb-1">
+                  <span className="font-bold text-slate-900 text-sm">Practice Mode</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-700">
+                    Unlocked
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500">Instant corrections & explanations.</p>
+              </div>
+
+              <div
+                onClick={() => {
+                  if (isActivated) {
+                    setMode('exam');
+                  } else {
+                    onOpenActivation();
+                  }
+                }}
+                className={`cursor-pointer rounded-2xl p-4 border-2 transition-all ${
+                  mode === 'exam'
+                    ? 'border-blue-500 bg-blue-50/30'
+                    : 'border-slate-100 bg-slate-50/50 hover:border-slate-200'
+                }`}
+              >
+                <div className="flex justify-between items-center mb-1">
+                  <span className="font-bold text-slate-900 text-sm">Exam Mode</span>
+                  {isActivated ? (
+                    <span className="text-[11px] font-extrabold px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-sm flex items-center gap-1">
+                      ✓ Unlocked
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-black px-2.5 py-1 rounded-md bg-amber-500 text-white shadow-sm ring-2 ring-amber-300/60 flex items-center gap-1 animate-pulse">
+                      🔒 Activation Required
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500">Timed simulation without live corrections.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Exam Configuration: Year, Duration, Total Questions */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Exam Year / Mode</label>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 cursor-pointer font-medium"
+              >
+                {years.map((y) => (
+                  <option key={y} value={y}>
+                    {y === 'Random' ? '🎲 Random Questions' : `${y} Past Questions`}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Duration (Hours)</label>
+              <input
+                type="number"
+                min="0"
+                max="5"
+                value={hours}
+                onChange={(e) => setHours(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 outline-none focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Duration (Minutes)</label>
+              <input
+                type="number"
+                min="0"
+                max="59"
+                value={minutes}
+                onChange={(e) => setMinutes(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 outline-none focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Total Questions</label>
+              <input
+                type="number"
+                value={totalQuestions}
+                onChange={(e) => setTotalQuestions(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 outline-none focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          {/* Launch Exam Button */}
+          <button
+            type="button"
+            onClick={handleStartExamSubmit}
+            className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm transition shadow-md active:scale-[0.99]"
+          >
+            Start {selectedSubject} ({selectedYear === 'Random' ? 'Random' : selectedYear}) - {mode === 'exam' ? 'Exam Mode' : 'Practice Mode'}
+          </button>
         </div>
       )}
     </div>
