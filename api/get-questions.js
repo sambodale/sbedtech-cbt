@@ -2,8 +2,8 @@
 
 export default async function handler(req, res) {
   const { subject = 'english', year = 'random', limit = 40 } = req.query;
+  const requestedLimit = parseInt(limit, 10) || 40;
 
-  // Comprehensive Subject mapping across providers
   const subjectMap = {
     'use of english': 'english',
     'english': 'english',
@@ -18,11 +18,6 @@ export default async function handler(req, res) {
     'commerce': 'commerce',
     'literature in english': 'englishlit',
     'yoruba': 'yoruba',
-    'yorùbá': 'yoruba',
-    'yòrùbá': 'yoruba',
-    'igbo': 'igbo',
-    'ìgbò': 'igbo',
-    'hausa': 'hausa',
     'government': 'government',
     'crs': 'crk',
     'irs': 'irk'
@@ -31,9 +26,12 @@ export default async function handler(req, res) {
   const rawSubject = (subject || '').toLowerCase().trim();
   const formattedSubject = subjectMap[rawSubject] || rawSubject;
 
-  // Helper: Fetch from ALOC API
+  // Helper: Fetch ALOC API
   const fetchALOC = async () => {
-    let url = `https://questions.aloc.com.ng/api/v2/m?subject=${encodeURIComponent(formattedSubject)}&limit=${limit}`;
+    // Request 25% extra questions from ALOC to guarantee we meet requestedLimit
+    const fetchLimit = requestedLimit + 10;
+    let url = `https://questions.aloc.com.ng/api/v2/m?subject=${encodeURIComponent(formattedSubject)}&limit=${fetchLimit}`;
+    
     if (year && year.toLowerCase() !== 'random') {
       url += `&year=${encodeURIComponent(year)}`;
     }
@@ -46,77 +44,47 @@ export default async function handler(req, res) {
     });
 
     if (!response.ok) throw new Error(`ALOC error ${response.status}`);
-    
+
     const json = await response.json();
     const list = Array.isArray(json.data) ? json.data : (json.data ? [json.data] : []);
 
-    return list.map((q, idx) => ({
-      id: `aloc-${q.id || idx}`,
-      source: 'ALOC',
-      question: q.question || '',
-      options: {
-        a: q.option?.a || '',
-        b: q.option?.b || '',
-        c: q.option?.c || '',
-        d: q.option?.d || ''
-      },
-      answer: q.answer || '',
-      explanation: q.solution || q.section || 'No detailed solution available.',
-      section: q.section || ''
-    }));
-  };
-
-  // Helper: Fetch from SDASH API
-  const fetchSDASH = async () => {
-    let url = `https://api.sdash.ng/v1/questions?subject=${encodeURIComponent(formattedSubject)}&limit=${limit}`;
-    if (year && year.toLowerCase() !== 'random') {
-      url += `&year=${encodeURIComponent(year)}`;
-    }
-
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${process.env.SDASH_API_KEY || ''}`,
-        'Content-Type': 'application/json'
+    return list.map((q, idx) => {
+      // 1. Combine passage/section with question for English comprehension
+      let fullQuestionText = q.question || '';
+      if (q.section && q.section.trim().length > 0) {
+        fullQuestionText = `<div class="passage-block bg-slate-50 p-3 rounded mb-3 border-l-4 border-blue-500 font-serif text-sm">${q.section}</div>` + fullQuestionText;
       }
+
+      // 2. Extract image URL if present
+      let imageUrl = q.image || q.hasImage || null;
+      if (imageUrl && !imageUrl.startsWith('http')) {
+        imageUrl = `https://questions.aloc.com.ng/storage/${imageUrl.replace(/^\//, '')}`;
+      }
+
+      return {
+        id: `aloc-${q.id || idx}`,
+        source: 'ALOC',
+        question: fullQuestionText,
+        imageUrl: imageUrl,
+        options: {
+          a: q.option?.a || '',
+          b: q.option?.b || '',
+          c: q.option?.c || '',
+          d: q.option?.d || ''
+        },
+        answer: q.answer || '',
+        explanation: q.solution || 'No detailed solution available.',
+        section: q.section || ''
+      };
     });
-
-    if (!response.ok) throw new Error(`SDASH error ${response.status}`);
-    
-    const json = await response.json();
-    const list = Array.isArray(json.data) ? json.data : [];
-
-    return list.map((q, idx) => ({
-      id: `sdash-${q.id || idx}`,
-      source: 'SDASH',
-      question: q.question_text || q.question || '',
-      options: {
-        a: q.option_a || q.options?.a || '',
-        b: q.option_b || q.options?.b || '',
-        c: q.option_c || q.options?.c || '',
-        d: q.option_d || q.options?.d || ''
-      },
-      answer: q.correct_option || q.answer || '',
-      explanation: q.explanation || 'No detailed solution available.',
-      section: q.section || ''
-    }));
   };
 
   try {
-    let questions = [];
+    let questions = await fetchALOC();
 
-    // Primary: Try fetching from ALOC
-    try {
-      questions = await fetchALOC();
-      console.log(`Fetched ${questions.length} questions from ALOC`);
-    } catch (alocErr) {
-      console.warn('ALOC API failed. Falling back to SDASH:', alocErr.message);
-      // Secondary: Fallback to SDASH if ALOC throws an error
-      questions = await fetchSDASH();
-      console.log(`Fetched ${questions.length} questions from SDASH`);
-    }
-
-    if (!questions || questions.length === 0) {
-      throw new Error('Both ALOC and SDASH returned empty question payloads.');
+    // Slice to match the exact requested count (e.g. 40)
+    if (questions.length > requestedLimit) {
+      questions = questions.slice(0, requestedLimit);
     }
 
     return res.status(200).json({
@@ -128,10 +96,10 @@ export default async function handler(req, res) {
     });
 
   } catch (err) {
-    console.error('Multi-Provider Fetch Error:', err.message);
+    console.error('Fetch Error:', err.message);
     return res.status(500).json({
       status: 'error',
-      message: 'Failed to retrieve questions from ALOC and SDASH providers.',
+      message: 'Failed to retrieve questions.',
       error: err.message
     });
   }

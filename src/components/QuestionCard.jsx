@@ -1,7 +1,4 @@
 import React, { useState } from 'react';
-import parse from 'html-react-parser';
-import katex from 'katex';
-import 'katex/dist/katex.min.css';
 
 export default function QuestionCard({ subject, mode, questions, onEndExam }) {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -26,34 +23,9 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
     );
   }
 
-  // Helper to render HTML strings and mathematical expressions securely
-  const renderFormattedContent = (content) => {
-    if (!content) return '';
-    let strContent = String(content);
-
-    // Parse inline KaTeX math if string contains LaTeX indicators like $ or \
-    strContent = strContent.replace(/\$(.*?)\$/g, (_, match) => {
-      try {
-        return katex.renderToString(match, { throwOnError: false });
-      } catch (e) {
-        return match;
-      }
-    });
-
-    return parse(strContent);
-  };
-
-  // Normalize options list
-  const rawOptions = currentQuestion.options || {};
-  let optionEntries = [];
-  if (Array.isArray(rawOptions)) {
-    optionEntries = rawOptions.map((opt, idx) => [
-      String.fromCharCode(97 + idx),
-      typeof opt === 'object' ? opt.val || opt.text || '' : opt,
-    ]);
-  } else if (typeof rawOptions === 'object' && rawOptions !== null) {
-    optionEntries = Object.entries(rawOptions).filter(([_, val]) => val && String(val).trim() !== '');
-  }
+  // Extract raw or formatted options object
+  const optionsObj = currentQuestion.options || {};
+  const optionEntries = Object.entries(optionsObj).filter(([_, val]) => val && String(val).trim() !== '');
 
   const handleSelectOption = (key) => {
     if (isSubmitted) return;
@@ -75,11 +47,12 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
       return {
         questionId: q.id || idx,
         question: q.question,
+        imageUrl: q.imageUrl,
         options: q.options,
         userAnswer: userAns,
         correctAnswer: correctAns,
         isCorrect,
-        explanation: q.explanation || q.section || 'No detailed explanation provided for this question.',
+        explanation: q.explanation || 'No detailed explanation provided.',
       };
     });
 
@@ -102,7 +75,7 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
     setIsSubmitted(true);
   };
 
-  // --- RESULT SCREEN ---
+  // --- 1. RESULT SUMMARY SCREEN ---
   if (isSubmitted && !showReview) {
     return (
       <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl border border-slate-200 p-8 text-center animate-in fade-in duration-200">
@@ -147,7 +120,7 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
     );
   }
 
-  // --- DETAILED REVIEW SCREEN ---
+  // --- 2. DETAILED REVIEW SCREEN ---
   if (isSubmitted && showReview) {
     return (
       <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl border border-slate-200 p-6 sm:p-8">
@@ -185,9 +158,22 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
                 </span>
               </div>
 
-              <div className="text-slate-800 font-medium mb-3">
-                {renderFormattedContent(item.question)}
-              </div>
+              {/* Review Question & Table Render */}
+              <div
+                className="text-slate-800 font-medium mb-3 leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: item.question }}
+              />
+
+              {/* Review Image Render */}
+              {item.imageUrl && (
+                <div className="my-3 flex justify-center">
+                  <img
+                    src={item.imageUrl}
+                    alt="Diagram"
+                    className="max-h-56 object-contain rounded border bg-white p-2"
+                  />
+                </div>
+              )}
 
               <div className="text-xs space-y-1 text-slate-600 mb-3">
                 <p>
@@ -206,7 +192,7 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
 
               <div className="mt-3 p-3 bg-white/80 rounded-lg border border-slate-200 text-xs text-slate-700">
                 <p className="font-semibold text-slate-900 mb-1">Explanation:</p>
-                <div>{renderFormattedContent(item.explanation)}</div>
+                <div dangerouslySetInnerHTML={{ __html: item.explanation }} />
               </div>
             </div>
           ))}
@@ -215,7 +201,7 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
     );
   }
 
-  // --- QUESTION TAKING VIEW ---
+  // --- 3. ACTIVE QUESTION TAKING VIEW ---
   return (
     <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-lg border border-slate-200 p-6 sm:p-8">
       <div className="flex justify-between items-center border-b pb-4 mb-6">
@@ -235,31 +221,24 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
         </button>
       </div>
 
-      {/* Render Instruction / Comprehension Passage if available */}
-      {currentQuestion.section && (
-        <div className="mb-4 p-4 bg-amber-50/60 border border-amber-200/80 rounded-xl text-xs text-amber-900 leading-relaxed">
-          <p className="font-bold mb-1 uppercase tracking-wider">Instruction / Passage:</p>
-          <div>{renderFormattedContent(currentQuestion.section)}</div>
-        </div>
-      )}
+      {/* RENDER PASSAGE + QUESTION + TABLES HERE */}
+      <div
+        className="question-text text-lg font-medium text-slate-800 leading-relaxed mb-6"
+        dangerouslySetInnerHTML={{ __html: currentQuestion.question }}
+      />
 
-      {/* Question Text & Embedded Diagrams */}
-      <div className="mb-6 text-lg font-medium text-slate-800 leading-relaxed">
-        {renderFormattedContent(currentQuestion.question)}
-      </div>
-
-      {/* Render Image Diagram if given as separate field */}
-      {currentQuestion.image && (
+      {/* RENDER DIAGRAM / IMAGE HERE IF PRESENT */}
+      {currentQuestion.imageUrl && (
         <div className="mb-6 flex justify-center">
           <img
-            src={currentQuestion.image}
+            src={currentQuestion.imageUrl}
             alt="Question Diagram"
-            className="max-h-64 object-contain rounded-lg border border-slate-200 shadow-sm"
+            className="max-h-64 object-contain rounded-lg border border-slate-200 p-2 bg-white shadow-sm"
           />
         </div>
       )}
 
-      {/* Options List */}
+      {/* OPTIONS LIST */}
       <div className="space-y-3 mb-8">
         {optionEntries.map(([key, value]) => {
           const isSelected = selectedAnswers[currentIndex] === key;
@@ -275,19 +254,19 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
               }`}
             >
               <span
-                className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-bold uppercase mr-3 ${
+                className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-bold uppercase mr-3 flex-shrink-0 ${
                   isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
                 }`}
               >
                 {key}
               </span>
-              <span className="text-base">{renderFormattedContent(value)}</span>
+              <span dangerouslySetInnerHTML={{ __html: value }} className="text-base" />
             </button>
           );
         })}
       </div>
 
-      {/* Controls */}
+      {/* FOOTER NAVIGATION */}
       <div className="flex justify-between items-center pt-4 border-t">
         <button
           type="button"
