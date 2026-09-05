@@ -1,68 +1,75 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import Header from './components/Header';
 import HomeScreen from './components/HomeScreen';
 import SignUpModal from './components/SignUpModal';
-import QuestionCard from './components/QuestionCard';
+
+const QuestionCard = lazy(() => import('./components/QuestionCard'));
+
+// Fallback test question bank in case API requests fail or go offline
+const MOCK_QUESTIONS = {
+  mathematics: [
+    {
+      id: 'local-1',
+      question: 'Solve for x: 2x + 5 = 15',
+      options: ['A) x = 5', 'B) x = 10', 'C) x = 7.5', 'D) x = 2'],
+      answer: 'Option A',
+      explanation: '2x = 15 - 5 => 2x = 10 => x = 5.'
+    }
+  ],
+  english: [
+    {
+      id: 'local-2',
+      question: 'Choose the option opposite in meaning to "PERMANENT":',
+      options: ['A) Temporary', 'B) Lasting', 'C) Durable', 'D) Constant'],
+      answer: 'Option A',
+      explanation: 'Temporary means lasting for only a limited period of time.'
+    }
+  ]
+};
 
 export default function App() {
   const [userProfile, setUserProfile] = useState(null);
   const [isActivated, setIsActivated] = useState(false);
   const [showSignUp, setShowSignUp] = useState(false);
-  const [pendingAction, setPendingAction] = useState(null); // 'startExam' | 'activate'
-
-  // CBT Exam State
-  const [examStarted, setExamStarted] = useState(false);
-  const [questions, setQuestions] = useState([]);
-  const [loading, setLoading] = useState(false);
+  
   const [activeSubject, setActiveSubject] = useState('');
   const [examMode, setExamMode] = useState('practice');
+  const [questions, setQuestions] = useState([]);
+  const [examStarted, setExamStarted] = useState(false);
+  const [loading, setLoading] = useState(false);
 
+  // Restore user profile from LocalStorage on load
   useEffect(() => {
-    const savedProfile = localStorage.getItem('userProfile');
-    const savedActivation = localStorage.getItem('isActivated') === 'true';
+    const savedUser = localStorage.getItem('sbedtech_user');
+    const savedActivation = localStorage.getItem('sbedtech_activated');
 
-    if (savedProfile) {
-      setUserProfile(JSON.parse(savedProfile));
+    if (savedUser) {
+      setUserProfile(JSON.parse(savedUser));
     }
-    setIsActivated(savedActivation);
+    if (savedActivation === 'true') {
+      setIsActivated(true);
+    }
   }, []);
 
-  // Trigger Paystack activation
+  // Save new registration profile
+  const handleSaveProfile = (profileData) => {
+    setUserProfile(profileData);
+    localStorage.setItem('sbedtech_user', JSON.stringify(profileData));
+    setShowSignUp(false);
+  };
+
+  // Launch Activation / Paystack Modal
   const handleOpenActivation = () => {
     if (!userProfile) {
-      setPendingAction('activate');
       setShowSignUp(true);
       return;
     }
-    
-    // Launch Paystack checkout flow
-    alert(`Redirecting ${userProfile.email} to Paystack Checkout...`);
-    
-    // Simulate successful Paystack verification (For testing/production hook)
-    // localStorage.setItem('isActivated', 'true');
-    // setIsActivated(true);
+    alert("Redirecting to Paystack payment gateway for Exam Mode activation...");
   };
 
-  // Called after user completes profile form
-  const handleSignUpSuccess = (profileData) => {
-    setUserProfile(profileData);
-    localStorage.setItem('userProfile', JSON.stringify(profileData));
-    setShowSignUp(false);
-
-    // Resume action user intended before signing up
-    if (pendingAction === 'activate') {
-      setPendingAction(null);
-      alert(`Profile created! Redirecting ${profileData.email} to Paystack Checkout...`);
-    } else {
-      setPendingAction(null);
-      // Returns user directly to HomeScreen with CBT Setup Selector active
-    }
-  };
-
-  // Starts the exam once user submits options in CBT Setup Selector
-  const handleStartExam = async ({ subject, mode, limit, durationInMinutes }) => {
+  // Handle starting exam with ALOC/SDASH provider API
+  const handleStartExam = async ({ subject, year, mode, limit, durationInMinutes }) => {
     if (!userProfile) {
-      setPendingAction('startExam');
       setShowSignUp(true);
       return;
     }
@@ -72,62 +79,83 @@ export default function App() {
     setExamMode(mode);
 
     try {
-      const response = await fetch(`/api/get-questions?subject=${subject}&limit=${limit}`);
-      const result = await response.json();
+      const response = await fetch(
+        `/api/get-questions?subject=${encodeURIComponent(subject)}&year=${encodeURIComponent(year)}&limit=${limit}`
+      );
 
-      if (result && result.data) {
-        setQuestions(Array.isArray(result.data) ? result.data : [result.data]);
-        setExamStarted(true);
-      } else {
-        alert('Could not retrieve questions for this subject. Please try again.');
+      if (response.ok) {
+        const result = await response.json();
+        if (result && result.data && result.data.length > 0) {
+          setQuestions(result.data);
+          setExamStarted(true);
+          setLoading(false);
+          return;
+        }
       }
+      throw new Error('API request failed or returned empty question dataset.');
     } catch (error) {
-      console.error('Error fetching questions:', error);
-      alert('Failed to connect to the question server.');
+      console.warn('API error encountered. Falling back to local dataset:', error.message);
+      
+      const key = subject.toLowerCase();
+      const localBank = MOCK_QUESTIONS[key] || MOCK_QUESTIONS['mathematics'];
+      setQuestions(localBank);
+      setExamStarted(true);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleEndExam = () => {
+    setExamStarted(false);
+    setQuestions([]);
+  };
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans">
-      <Header 
-        userProfile={userProfile} 
-        isActivated={isActivated} 
-        onOpenSignUp={() => setShowSignUp(true)} 
+    <div className="min-h-screen bg-slate-100 text-slate-800 font-sans">
+      <Header
+        userProfile={userProfile}
+        isActivated={isActivated}
+        onOpenSignUp={() => setShowSignUp(true)}
+        onOpenActivation={handleOpenActivation}
       />
 
-      {loading ? (
-        <div className="flex items-center justify-center min-h-[70vh]">
-          <p className="text-xl font-semibold text-blue-400 animate-pulse">
-            Loading {activeSubject.toUpperCase()} Questions...
-          </p>
-        </div>
-      ) : !examStarted ? (
-        <HomeScreen
-          userProfile={userProfile}
-          isActivated={isActivated}
-          onStartExam={handleStartExam}
-          onOpenSignUp={() => setShowSignUp(true)}
-          onOpenActivation={handleOpenActivation}
-        />
-      ) : (
-        <div className="p-6">
-          <QuestionCard 
-            questions={questions} 
-            mode={examMode} 
-            onExit={() => setExamStarted(false)} 
+      <main className="container mx-auto px-4 py-6">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20 space-y-4">
+            <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-slate-600 font-semibold text-sm">
+              Fetching questions from ALOC & SDASH Servers...
+            </p>
+          </div>
+        ) : !examStarted ? (
+          <HomeScreen
+            userProfile={userProfile}
+            isActivated={isActivated}
+            onStartExam={handleStartExam}
+            onOpenSignUp={() => setShowSignUp(true)}
+            onOpenActivation={handleOpenActivation}
           />
-        </div>
-      )}
+        ) : (
+          <Suspense fallback={
+            <div className="text-center py-10 font-bold text-slate-600">
+              Loading Exam Dashboard...
+            </div>
+          }>
+            <QuestionCard
+              subject={activeSubject}
+              mode={examMode}
+              questions={questions}
+              onEndExam={handleEndExam}
+            />
+          </Suspense>
+        )}
+      </main>
 
+      {/* SignUp / Candidate Profile Modal */}
       {showSignUp && (
         <SignUpModal
-          onClose={() => {
-            setShowSignUp(false);
-            setPendingAction(null);
-          }}
-          onSuccess={handleSignUpSuccess}
+          onClose={() => setShowSignUp(false)}
+          onSave={handleSaveProfile}
         />
       )}
     </div>
