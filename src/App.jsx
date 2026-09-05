@@ -50,12 +50,26 @@ export default function App() {
 
   const fetchExamQuestions = async ({ subject, year, mode, limit }) => {
     setLoading(true);
+
+    // Map common diacritics/variations to clean API slug keys
+    const subjectMap = {
+      'yoruba': 'yoruba',
+      'yorùbá': 'yoruba',
+      'yòrùbá': 'yoruba',
+      'igbo': 'igbo',
+      'ìgbò': 'igbo',
+      'hausa': 'hausa'
+    };
+
+    const rawSubject = (subject || '').toLowerCase().trim();
+    const cleanSubject = subjectMap[rawSubject] || rawSubject;
+
     setActiveSubject(subject);
     setExamMode(mode || 'practice');
 
     try {
       const response = await fetch(
-        `/api/get-questions?subject=${encodeURIComponent(subject)}&year=${encodeURIComponent(year || 'random')}&limit=${limit || 40}`
+        `/api/get-questions?subject=${encodeURIComponent(cleanSubject)}&year=${encodeURIComponent(year || 'random')}&limit=${limit || 40}`
       );
 
       if (response.ok) {
@@ -87,10 +101,10 @@ export default function App() {
           return;
         }
       }
-      throw new Error('No valid questions array returned.');
+      throw new Error(`No questions returned for ${subject}.`);
     } catch (error) {
       console.error('Error fetching questions:', error);
-      alert('Could not fetch questions from the server. Please check your network connection and try again.');
+      alert(`Could not fetch questions for ${subject}. Please check your network connection or try selecting a specific year.`);
     } finally {
       setLoading(false);
     }
