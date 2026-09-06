@@ -1,6 +1,14 @@
 import React, { useState } from 'react';
 
-export default function HomeScreen({ userProfile, isActivated, onStartExam, onOpenSignUp, onOpenActivation }) {
+export default function HomeScreen({
+  userProfile,
+  isActivated,
+  onStartExam,
+  onOpenSignUp,
+  onOpenActivation,
+  onOpenHistory,
+  onOpenDashboard,
+}) {
   const [selectedSubject, setSelectedSubject] = useState('Use of English');
   const [selectedYear, setSelectedYear] = useState('Random');
   const [mode, setMode] = useState('practice');
@@ -49,29 +57,54 @@ export default function HomeScreen({ userProfile, isActivated, onStartExam, onOp
     // Convert hours and minutes to numbers
     const parsedHours = parseInt(hours, 10) || 0;
     const parsedMinutes = parseInt(minutes, 10) || 0;
-    
+
     // Calculate total duration in minutes
-    const totalDurationInMinutes = (parsedHours * 60) + parsedMinutes;
+    const totalDurationInMinutes = parsedHours * 60 + parsedMinutes;
 
     onStartExam({
       subject: selectedSubject,
       year: selectedYear,
       mode,
       limit: parseInt(totalQuestions, 10) || 40,
-      durationInMinutes: totalDurationInMinutes > 0 ? totalDurationInMinutes : 90
+      durationInMinutes: totalDurationInMinutes > 0 ? totalDurationInMinutes : 90,
     });
   };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-6 font-sans">
       {/* Banner */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-8 text-center shadow-sm space-y-3">
+      <div className="bg-white border border-slate-200 rounded-3xl p-8 text-center shadow-sm space-y-4">
         <h1 className="text-3xl font-black text-blue-600">SbedTech CBT Portal</h1>
         <p className="text-slate-500 text-sm font-medium">
           {!userProfile
-            ? "First-time user? Click below or select any subject to register your profile."
+            ? 'First-time user? Click below or select any subject to register your profile.'
             : `Welcome back, ${userProfile.fullName || userProfile.username || 'Candidate'}! Select a subject to configure your setup.`}
         </p>
+
+        {/* Dashboard & History Triggers */}
+        {userProfile && (
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+            {onOpenDashboard && (
+              <button
+                type="button"
+                onClick={onOpenDashboard}
+                className="text-xs font-extrabold text-white bg-blue-600 hover:bg-blue-500 px-4 py-2.5 rounded-xl shadow-md transition transform hover:-translate-y-0.5 flex items-center gap-2"
+              >
+                <span>📊</span> Interactive Dashboard & Analytics
+              </button>
+            )}
+
+            {onOpenHistory && (
+              <button
+                type="button"
+                onClick={onOpenHistory}
+                className="text-xs font-bold text-slate-700 hover:bg-slate-100 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 transition flex items-center gap-2"
+              >
+                <span>📜</span> Attempt History
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {!isSettingUp ? (
@@ -100,9 +133,18 @@ export default function HomeScreen({ userProfile, isActivated, onStartExam, onOp
         /* STEP 2: CBT Setup View */
         <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
           <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">CBT Setup</span>
-              <h2 className="text-xl font-bold text-slate-900">{selectedSubject}</h2>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setIsSettingUp(false)}
+                className="text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200"
+              >
+                ← Back
+              </button>
+              <div>
+                <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">CBT Setup</span>
+                <h2 className="text-xl font-bold text-slate-900">{selectedSubject}</h2>
+              </div>
             </div>
 
             {/* Subject Selector Dropdown */}

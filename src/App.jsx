@@ -3,6 +3,7 @@ import Header from './components/Header';
 import HomeScreen from './components/HomeScreen';
 import SignUpModal from './components/SignUpModal';
 import ExamHistoryModal from './components/ExamHistoryModal';
+import DashboardModal from './components/DashboardModal';
 
 const QuestionCard = lazy(() => import('./components/QuestionCard'));
 
@@ -11,6 +12,7 @@ export default function App() {
   const [isActivated, setIsActivated] = useState(false);
   const [showSignUp, setShowSignUp] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showDashboardModal, setShowDashboardModal] = useState(false);
   
   const [pendingAction, setPendingAction] = useState(null);
   const [activeSubject, setActiveSubject] = useState('');
@@ -19,14 +21,18 @@ export default function App() {
   const [examStarted, setExamStarted] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Historical performance tracking state
+  const [examHistory, setExamHistory] = useState([]);
+
   // Timer state management
   const [timeLeft, setTimeLeft] = useState(null);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
 
-  // Restore user profile from LocalStorage on mount
+  // Restore user profile, activation status, and exam history from LocalStorage on mount
   useEffect(() => {
     const savedUser = localStorage.getItem('sbedtech_user');
     const savedActivation = localStorage.getItem('sbedtech_activated');
+    const savedHistory = localStorage.getItem('sbedtech_history');
 
     if (savedUser) {
       try {
@@ -35,8 +41,17 @@ export default function App() {
         console.error('Failed to parse stored user profile:', e);
       }
     }
+
     if (savedActivation === 'true') {
       setIsActivated(true);
+    }
+
+    if (savedHistory) {
+      try {
+        setExamHistory(JSON.parse(savedHistory));
+      } catch (e) {
+        console.error('Failed to parse exam history:', e);
+      }
     }
   }, []);
 
@@ -47,7 +62,6 @@ export default function App() {
     if (timeLeft <= 0) {
       setIsTimerRunning(false);
       alert('Time is up! Submitting your exam...');
-      // Clean up exam view when time expires
       handleEndExam();
       return;
     }
@@ -133,7 +147,7 @@ export default function App() {
     } catch (error) {
       console.error('Error fetching questions:', error);
       alert(`Could not fetch questions for ${subject}. Please check your network connection or try selecting a specific year.`);
-    } finally {
+    } fontally {
       setLoading(false);
     }
   };
@@ -148,6 +162,18 @@ export default function App() {
     fetchExamQuestions(params);
   };
 
+  // Weakness targeted practice trigger from DashboardModal
+  const handleStartWeaknessDrill = (targetSubject) => {
+    setShowDashboardModal(false);
+    handleStartExam({
+      subject: targetSubject || 'Use of English',
+      year: 'Random',
+      mode: 'practice',
+      limit: 20,
+      durationInMinutes: 30,
+    });
+  };
+
   const handleOpenActivation = () => {
     if (!userProfile) {
       setShowSignUp(true);
@@ -156,14 +182,28 @@ export default function App() {
     alert('Redirecting to payment gateway for Exam Mode activation...');
   };
 
-  const handleEndExam = () => {
+  const handleEndExam = (summaryData) => {
+    if (summaryData) {
+      const newRecord = {
+        id: Date.now(),
+        date: new Date().toISOString(),
+        subject: activeSubject,
+        mode: examMode,
+        score: summaryData.score || 0,
+        totalQuestions: summaryData.totalQuestions || questions.length || 40,
+      };
+
+      const updatedHistory = [newRecord, ...examHistory];
+      setExamHistory(updatedHistory);
+      localStorage.setItem('sbedtech_history', JSON.stringify(updatedHistory));
+    }
+
     setExamStarted(false);
     setQuestions([]);
     setIsTimerRunning(false);
     setTimeLeft(null);
   };
 
-  // Fixed Candidate Name Resolver
   const getCandidateName = () => {
     if (!userProfile) return 'Guest User';
     if (userProfile.fullName) return userProfile.fullName;
@@ -173,7 +213,6 @@ export default function App() {
     return fullName || 'Guest User';
   };
 
-  // Derive active exam title badge logic
   const getExamTypeLabel = () => {
     if (!examStarted) return 'JAMB CBT PORTAL';
     const sub = activeSubject ? activeSubject.toUpperCase() : 'CBT EXAM';
@@ -205,6 +244,7 @@ export default function App() {
             onOpenSignUp={() => setShowSignUp(true)}
             onOpenActivation={handleOpenActivation}
             onOpenHistory={() => setShowHistoryModal(true)}
+            onOpenDashboard={() => setShowDashboardModal(true)}
           />
         ) : (
           <Suspense
@@ -236,7 +276,18 @@ export default function App() {
       {/* Exam History Modal */}
       {showHistoryModal && (
         <ExamHistoryModal
+          history={examHistory}
           onClose={() => setShowHistoryModal(false)}
+        />
+      )}
+
+      {/* Interactive Performance Dashboard Modal */}
+      {showDashboardModal && (
+        <DashboardModal
+          userProfile={userProfile}
+          history={examHistory}
+          onClose={() => setShowDashboardModal(false)}
+          onStartWeaknessDrill={handleStartWeaknessDrill}
         />
       )}
     </div>
