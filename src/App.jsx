@@ -147,7 +147,7 @@ export default function App() {
     } catch (error) {
       console.error('Error fetching questions:', error);
       alert(`Could not fetch questions for ${subject}. Please check your network connection or try selecting a specific year.`);
-    } fontally {
+    } finally {
       setLoading(false);
     }
   };
