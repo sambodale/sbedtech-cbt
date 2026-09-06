@@ -37,9 +37,13 @@ export default function HomeScreen({
   ];
 
   // Generates array of years from 2026 down to 2005
-  const years = ['Random', ...Array.from({ length: 2026 - 2005 + 1 }, (_, i) => (2026 - i).toString())];
-
-  const handleSubjectSelect = (subjectName) => {
+  // Replace the dynamic Array.from line with explicit mapping:
+const currentYear = 2026;
+const startYear = 2005;
+const yearList = Array.from({ length: currentYear - startYear + 1 }, (_, i) => String(currentYear - i));
+const years = ['Random', ...yearList];
+ 
+const handleSubjectSelect = (subjectName) => {
     if (!userProfile) {
       onOpenSignUp();
       return;
