@@ -46,14 +46,19 @@ export default function HomeScreen({ userProfile, isActivated, onStartExam, onOp
       return;
     }
 
-    const durationInMinutes = Number(hours) * 60 + Number(minutes);
+    // Convert hours and minutes to numbers
+    const parsedHours = parseInt(hours, 10) || 0;
+    const parsedMinutes = parseInt(minutes, 10) || 0;
+    
+    // Calculate total duration in minutes
+    const totalDurationInMinutes = (parsedHours * 60) + parsedMinutes;
 
     onStartExam({
-      subject: selectedSubject.toLowerCase(),
+      subject: selectedSubject,
       year: selectedYear,
       mode,
-      limit: Number(totalQuestions),
-      durationInMinutes
+      limit: parseInt(totalQuestions, 10) || 40,
+      durationInMinutes: totalDurationInMinutes > 0 ? totalDurationInMinutes : 90
     });
   };
 
@@ -179,7 +184,7 @@ export default function HomeScreen({ userProfile, isActivated, onStartExam, onOp
                       <span className="text-blue-500 font-bold">✓</span> Access to Live AI Tutor
                     </li>
                     <li className="flex items-center gap-2">
-                      <span className="text-blue-500 font-bold:">✓</span> Downloadable Study Materials
+                      <span className="text-blue-500 font-bold">✓</span> Downloadable Study Materials
                     </li>
                   </ul>
                 </div>

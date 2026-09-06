@@ -71,7 +71,7 @@ export default function App() {
     }
   };
 
-  const fetchExamQuestions = async ({ subject, year, mode, limit, duration }) => {
+  const fetchExamQuestions = async ({ subject, year, mode, limit, duration, durationInMinutes }) => {
     setLoading(true);
 
     const subjectMap = {
@@ -120,9 +120,9 @@ export default function App() {
 
           setQuestions(formattedQuestions);
 
-          // Calculate duration in seconds (defaults to 15 minutes if not provided)
-          const durationMinutes = parseInt(duration, 10) || 15;
-          setTimeLeft(durationMinutes * 60);
+          // Accepts durationInMinutes or duration (defaults to 90 mins if not supplied)
+          const totalMinutes = parseInt(durationInMinutes || duration, 10) || 90;
+          setTimeLeft(totalMinutes * 60);
           setIsTimerRunning(true);
 
           setExamStarted(true);
@@ -138,14 +138,14 @@ export default function App() {
     }
   };
 
-  const handleStartExam = ({ subject, year, mode, limit, duration }) => {
+  const handleStartExam = (params) => {
     if (!userProfile) {
-      setPendingAction({ type: 'startExam', params: { subject, year, mode, limit, duration } });
+      setPendingAction({ type: 'startExam', params });
       setShowSignUp(true);
       return;
     }
 
-    fetchExamQuestions({ subject, year, mode, limit, duration });
+    fetchExamQuestions(params);
   };
 
   const handleOpenActivation = () => {
@@ -163,10 +163,12 @@ export default function App() {
     setTimeLeft(null);
   };
 
-  // Derive candidate name logic
+  // Fixed Candidate Name Resolver
   const getCandidateName = () => {
     if (!userProfile) return 'Guest User';
+    if (userProfile.fullName) return userProfile.fullName;
     if (userProfile.username) return userProfile.username;
+    if (userProfile.name) return userProfile.name;
     const fullName = `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim();
     return fullName || 'Guest User';
   };
