@@ -19,6 +19,10 @@ export default function App() {
   const [examStarted, setExamStarted] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Timer state management
+  const [timeLeft, setTimeLeft] = useState(null);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+
   // Restore user profile from LocalStorage on mount
   useEffect(() => {
     const savedUser = localStorage.getItem('sbedtech_user');
@@ -36,6 +40,25 @@ export default function App() {
     }
   }, []);
 
+  // Timer countdown interval effect
+  useEffect(() => {
+    if (!isTimerRunning || timeLeft === null) return;
+
+    if (timeLeft <= 0) {
+      setIsTimerRunning(false);
+      alert('Time is up! Submitting your exam...');
+      // Clean up exam view when time expires
+      handleEndExam();
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setTimeLeft((prevTime) => (prevTime > 0 ? prevTime - 1 : 0));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isTimerRunning, timeLeft]);
+
   const handleSaveProfile = (profileData) => {
     setUserProfile(profileData);
     localStorage.setItem('sbedtech_user', JSON.stringify(profileData));
@@ -48,10 +71,9 @@ export default function App() {
     }
   };
 
-  const fetchExamQuestions = async ({ subject, year, mode, limit }) => {
+  const fetchExamQuestions = async ({ subject, year, mode, limit, duration }) => {
     setLoading(true);
 
-    // Map common diacritics/variations to clean API slug keys
     const subjectMap = {
       'yoruba': 'yoruba',
       'yorùbá': 'yoruba',
@@ -97,6 +119,12 @@ export default function App() {
           });
 
           setQuestions(formattedQuestions);
+
+          // Calculate duration in seconds (defaults to 15 minutes if not provided)
+          const durationMinutes = parseInt(duration, 10) || 15;
+          setTimeLeft(durationMinutes * 60);
+          setIsTimerRunning(true);
+
           setExamStarted(true);
           return;
         }
@@ -110,14 +138,14 @@ export default function App() {
     }
   };
 
-  const handleStartExam = ({ subject, year, mode, limit }) => {
+  const handleStartExam = ({ subject, year, mode, limit, duration }) => {
     if (!userProfile) {
-      setPendingAction({ type: 'startExam', params: { subject, year, mode, limit } });
+      setPendingAction({ type: 'startExam', params: { subject, year, mode, limit, duration } });
       setShowSignUp(true);
       return;
     }
 
-    fetchExamQuestions({ subject, year, mode, limit });
+    fetchExamQuestions({ subject, year, mode, limit, duration });
   };
 
   const handleOpenActivation = () => {
@@ -131,16 +159,32 @@ export default function App() {
   const handleEndExam = () => {
     setExamStarted(false);
     setQuestions([]);
+    setIsTimerRunning(false);
+    setTimeLeft(null);
+  };
+
+  // Derive candidate name logic
+  const getCandidateName = () => {
+    if (!userProfile) return 'Guest User';
+    if (userProfile.username) return userProfile.username;
+    const fullName = `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim();
+    return fullName || 'Guest User';
+  };
+
+  // Derive active exam title badge logic
+  const getExamTypeLabel = () => {
+    if (!examStarted) return 'JAMB CBT PORTAL';
+    const sub = activeSubject ? activeSubject.toUpperCase() : 'CBT EXAM';
+    const mode = examMode ? examMode.toUpperCase() : 'PRACTICE';
+    return `${sub} (${mode})`;
   };
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 font-sans">
       <Header
-        userProfile={userProfile}
-        isActivated={isActivated}
-        onOpenSignUp={() => setShowSignUp(true)}
-        onOpenActivation={handleOpenActivation}
-        onOpenHistory={() => setShowHistoryModal(true)}
+        studentName={getCandidateName()}
+        examType={getExamTypeLabel()}
+        totalSeconds={timeLeft}
       />
 
       <main className="container mx-auto px-4 py-6">
@@ -172,6 +216,7 @@ export default function App() {
               subject={activeSubject}
               mode={examMode}
               questions={questions}
+              timeLeft={timeLeft}
               onEndExam={handleEndExam}
             />
           </Suspense>

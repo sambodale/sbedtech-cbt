@@ -65,7 +65,7 @@ export default function HomeScreen({ userProfile, isActivated, onStartExam, onOp
         <p className="text-slate-500 text-sm font-medium">
           {!userProfile
             ? "First-time user? Click below or select any subject to register your profile."
-            : `Welcome back, ${userProfile.fullName || userProfile.name || 'Candidate'}! Select a subject to configure your setup.`}
+            : `Welcome back, ${userProfile.fullName || userProfile.username || 'Candidate'}! Select a subject to configure your setup.`}
         </p>
       </div>
 
@@ -92,7 +92,7 @@ export default function HomeScreen({ userProfile, isActivated, onStartExam, onOp
           </div>
         </div>
       ) : (
-        /* STEP 2: CBT Setup View with Inline Subject Dropdown & Year Selection */
+        /* STEP 2: CBT Setup View */
         <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
           <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -122,24 +122,26 @@ export default function HomeScreen({ userProfile, isActivated, onStartExam, onOp
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
               Select Mode:
             </label>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Practice Mode Card */}
               <div
                 onClick={() => setMode('practice')}
-                className={`cursor-pointer rounded-2xl p-4 border-2 transition-all ${
+                className={`cursor-pointer rounded-2xl p-5 border-2 transition-all ${
                   mode === 'practice'
-                    ? 'border-blue-500 bg-blue-50/30'
+                    ? 'border-blue-500 bg-blue-50/30 shadow-sm'
                     : 'border-slate-100 bg-slate-50/50 hover:border-slate-200'
                 }`}
               >
-                <div className="flex justify-between items-center mb-1">
+                <div className="flex justify-between items-center mb-2">
                   <span className="font-bold text-slate-900 text-sm">Practice Mode</span>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-700">
                     Unlocked
                   </span>
                 </div>
-                <p className="text-xs text-slate-500">Instant corrections & explanations.</p>
+                <p className="text-xs text-slate-500">Instant corrections, answer key & detailed explanations.</p>
               </div>
 
+              {/* Exam Mode Card with Feature Breakdown */}
               <div
                 onClick={() => {
                   if (isActivated) {
@@ -148,25 +150,52 @@ export default function HomeScreen({ userProfile, isActivated, onStartExam, onOp
                     onOpenActivation();
                   }
                 }}
-                className={`cursor-pointer rounded-2xl p-4 border-2 transition-all ${
+                className={`cursor-pointer rounded-2xl p-5 border-2 transition-all flex flex-col justify-between ${
                   mode === 'exam'
-                    ? 'border-blue-500 bg-blue-50/30'
+                    ? 'border-blue-500 bg-blue-50/30 shadow-sm'
                     : 'border-slate-100 bg-slate-50/50 hover:border-slate-200'
                 }`}
               >
-                <div className="flex justify-between items-center mb-1">
-                  <span className="font-bold text-slate-900 text-sm">Exam Mode</span>
-                  {isActivated ? (
-                    <span className="text-[11px] font-extrabold px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-sm flex items-center gap-1">
-                      ✓ Unlocked
-                    </span>
-                  ) : (
-                    <span className="text-[11px] font-black px-2.5 py-1 rounded-md bg-amber-500 text-white shadow-sm ring-2 ring-amber-300/60 flex items-center gap-1 animate-pulse">
-                      🔒 Activation Required
-                    </span>
-                  )}
+                <div>
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="font-bold text-slate-900 text-sm">Exam Mode</span>
+                    {isActivated ? (
+                      <span className="text-[11px] font-extrabold px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-sm flex items-center gap-1">
+                        ✓ Unlocked
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-black px-2.5 py-1 rounded-md bg-amber-500 text-white shadow-md ring-2 ring-amber-300 flex items-center gap-1 animate-bounce">
+                        🔒 Activation Required
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Feature Checklist */}
+                  <ul className="space-y-1.5 text-xs text-slate-600 mb-4">
+                    <li className="flex items-center gap-2">
+                      <span className="text-blue-500 font-bold">✓</span> Standard Exam Simulation
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="text-blue-500 font-bold">✓</span> Access to Live AI Tutor
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="text-blue-500 font-bold:">✓</span> Downloadable Study Materials
+                    </li>
+                  </ul>
                 </div>
-                <p className="text-xs text-slate-500">Timed simulation without live corrections.</p>
+
+                {!isActivated && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenActivation();
+                    }}
+                    className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md hover:shadow-lg transition transform hover:-translate-y-0.5 animate-pulse"
+                  >
+                    ⚡ Activate Exam Mode Now
+                  </button>
+                )}
               </div>
             </div>
           </div>

@@ -1,13 +1,21 @@
-
 import React from 'react';
 
-export default function Header({ examType, studentName, totalSeconds }) {
+export default function Header({
+  examType = 'JAMB CBT PORTAL',
+  studentName = 'Guest User',
+  totalSeconds
+}) {
+  // Format seconds to HH:MM:SS or MM:SS
   const formatTime = (secs) => {
     if (secs === null || secs === undefined) return null;
     const h = Math.floor(secs / 3600);
     const m = Math.floor((secs % 3600) / 60);
     const s = secs % 60;
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+
+    if (h > 0) {
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
   return (
@@ -21,9 +29,11 @@ export default function Header({ examType, studentName, totalSeconds }) {
         </span>
       </div>
 
-      {totalSeconds !== null && (
+      {totalSeconds !== null && totalSeconds !== undefined && (
         <div className="flex items-center gap-2 bg-slate-950 px-4 py-1.5 rounded-xl border border-slate-800">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Time Left:</span>
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+            Time Left:
+          </span>
           <span className="font-mono text-base font-bold text-amber-400">
             {formatTime(totalSeconds)}
           </span>
