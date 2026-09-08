@@ -10,6 +10,26 @@ import { auth, db } from "../firebase/config";
 const NAME_REGEX = /^[a-zA-Z\s]{2,50}$/;
 
 /**
+ * Fetches user profile details from Firestore.
+ * @param {string} uid 
+ */
+export const getUserProfile = async (uid) => {
+  if (!uid) return null;
+  try {
+    const userRef = doc(db, "users", uid);
+    const docSnap = await getDoc(userRef);
+
+    if (docSnap.exists()) {
+      return docSnap.data();
+    }
+    return null;
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    throw error;
+  }
+};
+
+/**
  * Checks if a user profile exists in Firestore and creates one if missing.
  * Prevents missing profile issues for legacy users who registered before Firestore profile creation was added.
  * @param {Object} user - Firebase Auth user object

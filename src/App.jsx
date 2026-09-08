@@ -238,13 +238,17 @@ export default function App() {
   };
 
   const getCandidateName = () => {
+    if (activeUserProfile?.fullName) return activeUserProfile.fullName;
+    if (activeUserProfile?.username) return activeUserProfile.username;
+    if (activeUserProfile?.name) return activeUserProfile.name;
+    
+    const fullName = `${activeUserProfile?.firstName || ''} ${activeUserProfile?.lastName || ''}`.trim();
+    if (fullName) return fullName;
+
     if (currentUser?.email) return currentUser.email.split('@')[0];
-    if (!activeUserProfile) return 'Guest User';
-    if (activeUserProfile.fullName) return activeUserProfile.fullName;
-    if (activeUserProfile.username) return activeUserProfile.username;
-    if (activeUserProfile.name) return activeUserProfile.name;
-    const fullName = `${activeUserProfile.firstName || ''} ${activeUserProfile.lastName || ''}`.trim();
-    return fullName || 'Guest User';
+    if (activeUserProfile?.email) return activeUserProfile.email.split('@')[0];
+
+    return 'Guest User';
   };
 
   const getExamTypeLabel = () => {
