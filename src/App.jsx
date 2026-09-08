@@ -4,16 +4,25 @@ import HomeScreen from './components/HomeScreen';
 import SignUpModal from './components/SignUpModal';
 import ExamHistoryModal from './components/ExamHistoryModal';
 import DashboardModal from './components/DashboardModal';
+import { useAuth } from './context/AuthContext';
+import { saveExamResult, getUserExamHistory } from './services/examServices';
 
 const QuestionCard = lazy(() => import('./components/QuestionCard'));
 
 export default function App() {
-  const [userProfile, setUserProfile] = useState(null);
-  const [isActivated, setIsActivated] = useState(false);
+  // Firebase Auth Context
+  const { currentUser, userProfile: firebaseProfile, isActivated: firebaseActivated } = useAuth();
+
+  // Local fallback states for guests/offline usage
+  const [localUserProfile, setLocalUserProfile] = useState(null);
+  const [localActivated, setLocalActivated] = useState(false);
+  
+  // Modal visibility controls
   const [showSignUp, setShowSignUp] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showDashboardModal, setShowDashboardModal] = useState(false);
   
+  // Interceptor & Exam state
   const [pendingAction, setPendingAction] = useState(null);
   const [activeSubject, setActiveSubject] = useState('');
   const [examMode, setExamMode] = useState('practice');
@@ -21,41 +30,52 @@ export default function App() {
   const [examStarted, setExamStarted] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Historical performance tracking state
+  // Exam performance tracking state
   const [examHistory, setExamHistory] = useState([]);
 
   // Timer state management
   const [timeLeft, setTimeLeft] = useState(null);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
 
-  // Restore user profile, activation status, and exam history from LocalStorage on mount
+  // Combine Firebase Profile with Local Profile
+  const activeUserProfile = currentUser 
+    ? { email: currentUser.email, ...firebaseProfile }
+    : localUserProfile;
+
+  const isUserActivated = firebaseActivated || localActivated;
+
+  // Sync LocalStorage & Firebase Exam History on Mount or User Change
   useEffect(() => {
-    const savedUser = localStorage.getItem('sbedtech_user');
-    const savedActivation = localStorage.getItem('sbedtech_activated');
-    const savedHistory = localStorage.getItem('sbedtech_history');
+    const loadUserData = async () => {
+      // 1. Check LocalStorage fallback
+      const savedUser = localStorage.getItem('sbedtech_user');
+      const savedActivation = localStorage.getItem('sbedtech_activated');
+      const savedHistory = localStorage.getItem('sbedtech_history');
 
-    if (savedUser) {
-      try {
-        setUserProfile(JSON.parse(savedUser));
-      } catch (e) {
-        console.error('Failed to parse stored user profile:', e);
+      if (savedUser) {
+        try { setLocalUserProfile(JSON.parse(savedUser)); } catch (e) { console.error(e); }
       }
-    }
+      if (savedActivation === 'true') { setLocalActivated(true); }
 
-    if (savedActivation === 'true') {
-      setIsActivated(true);
-    }
-
-    if (savedHistory) {
-      try {
-        setExamHistory(JSON.parse(savedHistory));
-      } catch (e) {
-        console.error('Failed to parse exam history:', e);
+      // 2. Fetch Firebase history if logged in, otherwise load LocalStorage history
+      if (currentUser) {
+        try {
+          const remoteHistory = await getUserExamHistory(currentUser.uid);
+          setExamHistory(remoteHistory);
+          localStorage.setItem('sbedtech_history', JSON.stringify(remoteHistory));
+        } catch (e) {
+          console.error('Failed to sync Firestore history:', e);
+          if (savedHistory) setExamHistory(JSON.parse(savedHistory));
+        }
+      } else if (savedHistory) {
+        try { setExamHistory(JSON.parse(savedHistory)); } catch (e) { console.error(e); }
       }
-    }
-  }, []);
+    };
 
-  // Timer countdown interval effect
+    loadUserData();
+  }, [currentUser]);
+
+  // Timer countdown effect
   useEffect(() => {
     if (!isTimerRunning || timeLeft === null) return;
 
@@ -73,8 +93,9 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isTimerRunning, timeLeft]);
 
+  // Save profile and execute pending exam launch
   const handleSaveProfile = (profileData) => {
-    setUserProfile(profileData);
+    setLocalUserProfile(profileData);
     localStorage.setItem('sbedtech_user', JSON.stringify(profileData));
     setShowSignUp(false);
 
@@ -134,7 +155,6 @@ export default function App() {
 
           setQuestions(formattedQuestions);
 
-          // Accepts durationInMinutes or duration (defaults to 90 mins if not supplied)
           const totalMinutes = parseInt(durationInMinutes || duration, 10) || 90;
           setTimeLeft(totalMinutes * 60);
           setIsTimerRunning(true);
@@ -153,7 +173,7 @@ export default function App() {
   };
 
   const handleStartExam = (params) => {
-    if (!userProfile) {
+    if (!currentUser && !localUserProfile) {
       setPendingAction({ type: 'startExam', params });
       setShowSignUp(true);
       return;
@@ -162,7 +182,6 @@ export default function App() {
     fetchExamQuestions(params);
   };
 
-  // Weakness targeted practice trigger from DashboardModal
   const handleStartWeaknessDrill = (targetSubject) => {
     setShowDashboardModal(false);
     handleStartExam({
@@ -175,14 +194,14 @@ export default function App() {
   };
 
   const handleOpenActivation = () => {
-    if (!userProfile) {
+    if (!currentUser && !localUserProfile) {
       setShowSignUp(true);
       return;
     }
     alert('Redirecting to payment gateway for Exam Mode activation...');
   };
 
-  const handleEndExam = (summaryData) => {
+  const handleEndExam = async (summaryData) => {
     if (summaryData) {
       const newRecord = {
         id: Date.now(),
@@ -192,6 +211,20 @@ export default function App() {
         score: summaryData.score || 0,
         totalQuestions: summaryData.totalQuestions || questions.length || 40,
       };
+
+      if (currentUser?.uid) {
+        try {
+          await saveExamResult(currentUser.uid, {
+            subject: activeSubject,
+            score: newRecord.score,
+            totalQuestions: newRecord.totalQuestions,
+            timeSpentSeconds: summaryData.timeSpentSeconds || 0,
+            userAnswers: summaryData.userAnswers || {}
+          });
+        } catch (err) {
+          console.error("Failed to sync result to Firestore:", err);
+        }
+      }
 
       const updatedHistory = [newRecord, ...examHistory];
       setExamHistory(updatedHistory);
@@ -205,11 +238,12 @@ export default function App() {
   };
 
   const getCandidateName = () => {
-    if (!userProfile) return 'Guest User';
-    if (userProfile.fullName) return userProfile.fullName;
-    if (userProfile.username) return userProfile.username;
-    if (userProfile.name) return userProfile.name;
-    const fullName = `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim();
+    if (currentUser?.email) return currentUser.email.split('@')[0];
+    if (!activeUserProfile) return 'Guest User';
+    if (activeUserProfile.fullName) return activeUserProfile.fullName;
+    if (activeUserProfile.username) return activeUserProfile.username;
+    if (activeUserProfile.name) return activeUserProfile.name;
+    const fullName = `${activeUserProfile.firstName || ''} ${activeUserProfile.lastName || ''}`.trim();
     return fullName || 'Guest User';
   };
 
@@ -226,6 +260,7 @@ export default function App() {
         studentName={getCandidateName()}
         examType={getExamTypeLabel()}
         totalSeconds={timeLeft}
+        onOpenAuth={() => setShowSignUp(true)}
       />
 
       <main className="container mx-auto px-4 py-6">
@@ -238,8 +273,8 @@ export default function App() {
           </div>
         ) : !examStarted ? (
           <HomeScreen
-            userProfile={userProfile}
-            isActivated={isActivated}
+            userProfile={activeUserProfile}
+            isActivated={isUserActivated}
             onStartExam={handleStartExam}
             onOpenSignUp={() => setShowSignUp(true)}
             onOpenActivation={handleOpenActivation}
@@ -265,15 +300,22 @@ export default function App() {
         )}
       </main>
 
-      {/* Candidate Sign Up / Profile Modal */}
       {showSignUp && (
         <SignUpModal
+          isOpen={showSignUp}
           onClose={() => setShowSignUp(false)}
           onSave={handleSaveProfile}
+          onSuccess={() => {
+            setShowSignUp(false);
+            if (pendingAction && pendingAction.type === 'startExam') {
+              const { params } = pendingAction;
+              setPendingAction(null);
+              fetchExamQuestions(params);
+            }
+          }}
         />
       )}
 
-      {/* Exam History Modal */}
       {showHistoryModal && (
         <ExamHistoryModal
           history={examHistory}
@@ -281,10 +323,9 @@ export default function App() {
         />
       )}
 
-      {/* Interactive Performance Dashboard Modal */}
       {showDashboardModal && (
         <DashboardModal
-          userProfile={userProfile}
+          userProfile={activeUserProfile}
           history={examHistory}
           onClose={() => setShowDashboardModal(false)}
           onStartWeaknessDrill={handleStartWeaknessDrill}

@@ -1,110 +1,133 @@
 import React, { useState } from 'react';
+import { registerCandidate, loginCandidate } from '../services/authServices';
 
-export default function SignUpModal({ onClose, onSave }) {
-  const [fullName, setFullName] = useState('');
+export default function SignUpModal({ isOpen, onClose, onSuccess, onSave }) {
+  const [isLogin, setIsLogin] = useState(false);
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+    setLoading(true);
 
-    if (!fullName.trim() || !email.trim() || !phone.trim()) {
-      setErrorMsg('Please fill in all required fields.');
-      return;
+    try {
+      if (isLogin) {
+        await loginCandidate(email, password);
+      } else {
+        await registerCandidate(email, password);
+      }
+      
+      const profileData = { email };
+
+      // Reset form
+      setEmail('');
+      setPassword('');
+
+      if (onSave) {
+        onSave(profileData);
+      }
+      
+      if (onSuccess) {
+        onSuccess();
+      } else if (onClose) {
+        onClose();
+      }
+    } catch (err) {
+      const friendlyMsg = err.message
+        .replace('Firebase: ', '')
+        .replace('Error (auth/', '')
+        .replace(').', '');
+      setError(friendlyMsg);
+    } finally {
+      setLoading(false);
     }
-
-    // Pass collected data to App.jsx
-    onSave({
-      fullName: fullName.trim(),
-      email: email.trim(),
-      phone: phone.trim()
-    });
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 sm:p-8 animate-in fade-in zoom-in duration-200">
-        
-        {/* Close Button */}
-        <button
-          type="button"
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl relative border border-gray-100">
+        <button 
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-xl font-bold p-1 rounded-lg hover:bg-slate-100 transition"
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-lg font-bold"
         >
           ✕
         </button>
 
-        <h2 className="text-2xl font-bold text-slate-800 mb-1">Create Profile</h2>
-        <p className="text-slate-500 text-sm mb-6">
-          Enter candidate details to unlock exams and save practice results.
-        </p>
+        <div className="mb-6">
+          <h2 className="text-xl font-black text-gray-800">
+            {isLogin ? 'Welcome Back' : 'Create Candidate Account'}
+          </h2>
+          <p className="text-xs text-gray-500 mt-1">
+            {isLogin 
+              ? 'Sign in to access your saved CBT practice sessions.' 
+              : 'Sign up to practice exam questions and store test history.'}
+          </p>
+        </div>
 
-        {errorMsg && (
-          <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200 font-medium">
-            {errorMsg}
+        {error && (
+          <div className="mb-4 p-3 bg-rose-50 border border-rose-100 text-rose-600 rounded-xl text-xs font-medium">
+            {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">
-              Full Name
-            </label>
-            <input
-              type="text"
-              required
-              placeholder="John Doe"
-              value={fullName}
-              onChange={(e) => {
-                setFullName(e.target.value);
-                if (errorMsg) setErrorMsg('');
-              }}
-              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-slate-800"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">
+            <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
               Email Address
             </label>
-            <input
-              type="email"
-              required
-              placeholder="example@gmail.com"
+            <input 
+              type="email" 
+              required 
+              placeholder="candidate@example.com"
               value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                if (errorMsg) setErrorMsg('');
-              }}
-              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-slate-800"
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">
-              Phone Number
+            <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
+              Password
             </label>
-            <input
-              type="tel"
-              required
-              placeholder="+234..."
-              value={phone}
-              onChange={(e) => {
-                setPhone(e.target.value);
-                if (errorMsg) setErrorMsg('');
-              }}
-              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-slate-800"
+            <input 
+              type="password" 
+              required 
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition"
             />
           </div>
 
-          <button
-            type="submit"
-            className="w-full mt-2 py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl shadow-md shadow-blue-500/20 active:scale-[0.98] transition-all"
+          <button 
+            type="submit" 
+            disabled={loading}
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-sm transition shadow-sm hover:shadow active:scale-[0.99]"
           >
-            Save & Continue to Take Exam
+            {loading ? 'Authenticating...' : isLogin ? 'Sign In' : 'Create Account'}
           </button>
         </form>
+
+        <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between text-xs">
+          <span className="text-gray-500">
+            {isLogin ? "Don't have an account?" : "Already registered?"}
+          </span>
+          <button 
+            type="button"
+            onClick={() => {
+              setIsLogin(!isLogin);
+              setError('');
+            }} 
+            className="text-emerald-600 font-bold hover:underline"
+          >
+            {isLogin ? 'Sign Up' : 'Sign In'}
+          </button>
+        </div>
       </div>
     </div>
   );

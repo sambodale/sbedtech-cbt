@@ -11,7 +11,9 @@
   },
   "dependencies": {
     "chart.js": "^4.5.1",
+    "firebase": "^12.18.0",
     "html-react-parser": "^6.1.7",
+    "html2pdf.js": "^0.14.0",
     "katex": "^0.18.6",
     "react": "^19.2.8",
     "react-chartjs-2": "^5.3.1",
