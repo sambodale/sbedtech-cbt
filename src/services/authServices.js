@@ -3,11 +3,33 @@ import {
   signInWithEmailAndPassword, 
   signOut 
 } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../firebase/config";
 
 // Regex patterns for client-side validation
 const NAME_REGEX = /^[a-zA-Z\s]{2,50}$/;
+
+/**
+ * Checks if a user profile exists in Firestore and creates one if missing.
+ * Prevents missing profile issues for legacy users who registered before Firestore profile creation was added.
+ * @param {Object} user - Firebase Auth user object
+ */
+export const ensureUserProfileExists = async (user) => {
+  if (!user) return;
+
+  const userRef = doc(db, "users", user.uid);
+  const docSnap = await getDoc(userRef);
+
+  if (!docSnap.exists()) {
+    await setDoc(userRef, {
+      uid: user.uid,
+      email: user.email || "",
+      fullName: user.displayName || user.email?.split("@")[0] || "Candidate",
+      role: "student",
+      createdAt: serverTimestamp(),
+    });
+  }
+};
 
 /**
  * Registers a new candidate and saves their profile to Firestore.
@@ -44,13 +66,19 @@ export const registerCandidate = async (email, password, extraData = {}) => {
 
 /**
  * Logs in an existing candidate using Firebase Authentication.
+ * Automatically backfills missing Firestore documents for older candidate accounts.
  * @param {string} email 
  * @param {string} password 
  */
 export const loginCandidate = async (email, password) => {
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    return userCredential.user;
+    const user = userCredential.user;
+
+    // Automatically check and backfill missing Firestore profile document upon login
+    await ensureUserProfileExists(user);
+
+    return user;
   } catch (error) {
     console.error("Error signing in candidate:", error);
     throw error;
