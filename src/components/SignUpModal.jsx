@@ -3,6 +3,7 @@ import { registerCandidate, loginCandidate } from '../services/authServices';
 
 export default function SignUpModal({ isOpen, onClose, onSuccess, onSave }) {
   const [isLogin, setIsLogin] = useState(false);
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -19,12 +20,14 @@ export default function SignUpModal({ isOpen, onClose, onSuccess, onSave }) {
       if (isLogin) {
         await loginCandidate(email, password);
       } else {
-        await registerCandidate(email, password);
+        // Pass fullName and role inside extraData
+        await registerCandidate(email, password, { fullName, role: 'student' });
       }
       
-      const profileData = { email };
+      const profileData = { email, fullName };
 
-      // Reset form
+      // Reset form state
+      setFullName('');
       setEmail('');
       setPassword('');
 
@@ -76,6 +79,23 @@ export default function SignUpModal({ isOpen, onClose, onSuccess, onSave }) {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Render Full Name field only during registration */}
+          {!isLogin && (
+            <div>
+              <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
+                Full Name
+              </label>
+              <input 
+                type="text" 
+                required 
+                placeholder="e.g. Samuel John"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition"
+              />
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-bold text-gray-600 uppercase mb-1">
               Email Address
