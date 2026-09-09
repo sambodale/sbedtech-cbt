@@ -1,315 +1,249 @@
 import React, { useState } from 'react';
+import DashboardView from './DashboardView';
+
+const SUBJECT_LIST = [
+  { name: 'Use of English', icon: '📖' },
+  { name: 'Mathematics', icon: '📐' },
+  { name: 'Physics', icon: '⚡' },
+  { name: 'Chemistry', icon: '🧪' },
+  { name: 'Biology', icon: '🧬' },
+  { name: 'Economics', icon: '📚' },
+  { name: 'Geography', icon: '🗺️' },
+  { name: 'Agricultural Science', icon: '🌱' },
+  { name: 'Financial Accounting', icon: '📊' },
+  { name: 'Commerce', icon: '🏢' },
+  { name: 'Literature in English', icon: '🎭' },
+  { name: 'Islamic Religious Studies (IRS)', icon: '🌙' },
+  { name: 'Yoruba', icon: '🗣️' },
+  { name: 'Hausa', icon: '🗣️' },
+  { name: 'Igbo', icon: '🗣️' },
+];
 
 export default function HomeScreen({
   userProfile,
-  isActivated,
+  history = [],
+  isActivated = false,
   onStartExam,
-  onOpenSignUp,
+  onStartWeaknessDrill,
   onOpenActivation,
   onOpenHistory,
-  onOpenDashboard,
 }) {
-  const [selectedSubject, setSelectedSubject] = useState('Use of English');
-  const [selectedYear, setSelectedYear] = useState('Random');
-  const [mode, setMode] = useState('practice');
-  const [hours, setHours] = useState(1);
-  const [minutes, setMinutes] = useState(30);
-  const [totalQuestions, setTotalQuestions] = useState(40);
-  const [isSettingUp, setIsSettingUp] = useState(false);
+  const [selectedSubject, setSelectedSubject] = useState('');
+  const [showSetupPanel, setShowSetupPanel] = useState(false);
 
-  // Subject List
-  const subjects = [
-    { name: 'Use of English', icon: '📖' },
-    { name: 'Mathematics', icon: '📐' },
-    { name: 'Physics', icon: '⚡' },
-    { name: 'Chemistry', icon: '🧪' },
-    { name: 'Biology', icon: '🧬' },
-    { name: 'Economics', icon: '📚' },
-    { name: 'Geography', icon: '🗺️' },
-    { name: 'Agricultural Science', icon: '🌱' },
-    { name: 'Financial Accounting', icon: '📊' },
-    { name: 'Commerce', icon: '🏢' },
-    { name: 'Literature in English', icon: '🎭' },
-    { name: 'Yoruba', icon: '🗣️' },
-    { name: 'Government', icon: '🏛️' },
-    { name: 'CRS', icon: '✝️' },
-    { name: 'IRS', icon: '☪️' },
-  ];
+  // CBT Setup form states matching original design
+  const [examYearMode, setExamYearMode] = useState('Random Questions');
+  const [durationHours, setDurationHours] = useState('1');
+  const [durationMinutes, setDurationMinutes] = useState('30');
+  const [totalQuestions, setTotalQuestions] = useState('40');
 
-  // Generates array of years from 2026 down to 2005
-  // Replace the dynamic Array.from line with explicit mapping:
-const currentYear = 2026;
-const startYear = 2005;
-const yearList = Array.from({ length: currentYear - startYear + 1 }, (_, i) => String(currentYear - i));
-const years = ['Random', ...yearList];
- 
-const handleSubjectSelect = (subjectName) => {
-    if (!userProfile) {
-      onOpenSignUp();
-      return;
+  const handleSubjectChange = (e) => {
+    const subject = e.target.value;
+    setSelectedSubject(subject);
+    if (subject) {
+      setShowSetupPanel(true);
     }
-    setSelectedSubject(subjectName);
-    setIsSettingUp(true);
   };
 
-  const handleStartExamSubmit = () => {
-    if (!userProfile) {
-      onOpenSignUp();
-      return;
-    }
+  const handleLaunchCbt = (e) => {
+    e.preventDefault();
+    if (!selectedSubject) return;
 
-    // Convert hours and minutes to numbers
-    const parsedHours = parseInt(hours, 10) || 0;
-    const parsedMinutes = parseInt(minutes, 10) || 0;
+    const hoursInMins = parseInt(durationHours || '0', 10) * 60;
+    const mins = parseInt(durationMinutes || '0', 10);
+    const totalDuration = hoursInMins + mins || 90;
 
-    // Calculate total duration in minutes
-    const totalDurationInMinutes = parsedHours * 60 + parsedMinutes;
+    const cleanYear = examYearMode.includes('Random') 
+      ? 'Random' 
+      : examYearMode.replace(/\D/g, '');
 
     onStartExam({
       subject: selectedSubject,
-      year: selectedYear,
-      mode,
+      mode: 'practice',
+      year: cleanYear || 'Random',
+      durationInMinutes: totalDuration,
       limit: parseInt(totalQuestions, 10) || 40,
-      durationInMinutes: totalDurationInMinutes > 0 ? totalDurationInMinutes : 90,
     });
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6 font-sans">
-      {/* Banner */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-8 text-center shadow-sm space-y-4">
-        <h1 className="text-3xl font-black text-blue-600">SbedTech CBT Portal</h1>
-        <p className="text-slate-500 text-sm font-medium">
-          {!userProfile
-            ? 'First-time user? Click below or select any subject to register your profile.'
-            : `Welcome back, ${userProfile.fullName || userProfile.username || 'Candidate'}! Select a subject to configure your setup.`}
-        </p>
+    <div className="space-y-6 max-w-xl mx-auto font-sans">
+      
+      {/* 1. SBEDTECH CBT PORTAL HEADER CARD */}
+      <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-xl text-center space-y-5 relative z-20">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-extrabold text-blue-600 tracking-tight">
+            SbedTech CBT Portal
+          </h1>
+          <p className="text-sm font-medium text-slate-500 max-w-sm mx-auto">
+            Welcome back, <span className="font-bold text-slate-800">{userProfile?.fullName || 'Candidate'}</span>! Select a subject to configure your setup.
+          </p>
+        </div>
 
-        {/* Dashboard & History Triggers */}
-        {userProfile && (
-          <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
-            {onOpenDashboard && (
-              <button
-                type="button"
-                onClick={onOpenDashboard}
-                className="text-xs font-extrabold text-white bg-blue-600 hover:bg-blue-500 px-4 py-2.5 rounded-xl shadow-md transition transform hover:-translate-y-0.5 flex items-center gap-2"
-              >
-                <span>📊</span> Interactive Dashboard & Analytics
-              </button>
-            )}
+        {/* 2. SUBJECT DROPDOWN SELECTOR */}
+        <div className="relative">
+          <select
+            value={selectedSubject}
+            onChange={handleSubjectChange}
+            className="w-full py-3.5 px-5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-2xl shadow-lg transition cursor-pointer text-center appearance-none focus:outline-none focus:ring-4 focus:ring-blue-300"
+          >
+            <option value="" disabled className="bg-slate-900 text-white">
+              👇 Select Subject to Begin Practice
+            </option>
+            {SUBJECT_LIST.map((sub) => (
+              <option key={sub.name} value={sub.name} className="bg-slate-900 text-white font-semibold">
+                {sub.icon} {sub.name}
+              </option>
+            ))}
+          </select>
+        </div>
 
-            {onOpenHistory && (
-              <button
-                type="button"
-                onClick={onOpenHistory}
-                className="text-xs font-bold text-slate-700 hover:bg-slate-100 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200 transition flex items-center gap-2"
-              >
-                <span>📜</span> Attempt History
-              </button>
-            )}
-          </div>
-        )}
+        {/* 3. ATTEMPT HISTORY BUTTON */}
+        <div>
+          <button
+            onClick={onOpenHistory}
+            className="w-full sm:w-auto px-8 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-2xl shadow-sm transition inline-flex items-center justify-center gap-2"
+          >
+            📜 Attempt History
+          </button>
+        </div>
       </div>
 
-      {!isSettingUp ? (
-        /* STEP 1: Main Subject Grid View */
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-5">
-          <div className="flex justify-between items-center">
-            <h2 className="text-sm font-bold text-slate-800">Select Subject to Begin</h2>
-            <span className="text-xs text-slate-400">Click any subject to open CBT Setup</span>
+      {/* 4. CBT SETUP CONFIGURATION PANEL (MATCHING ORIGINAL DESIGN) */}
+      {showSetupPanel && selectedSubject && (
+        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-lg space-y-5 animate-fadeIn">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 className="text-sm font-extrabold text-slate-800">
+              CBT Setup: <span className="text-blue-600">{selectedSubject}</span>
+            </h3>
+            <button
+              onClick={() => setShowSetupPanel(false)}
+              className="text-xs font-bold text-slate-400 hover:text-slate-600"
+            >
+              ✕ Close
+            </button>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {subjects.map((sub) => (
-              <button
-                key={sub.name}
-                type="button"
-                onClick={() => handleSubjectSelect(sub.name)}
-                className="p-4 rounded-2xl border border-slate-100 bg-slate-50/50 hover:border-blue-500 hover:bg-blue-50/30 text-slate-700 transition flex flex-col items-center justify-center gap-2 group"
-              >
-                <span className="text-2xl group-hover:scale-110 transition-transform">{sub.icon}</span>
-                <span className="text-xs font-bold text-center">{sub.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : (
-        /* STEP 2: CBT Setup View */
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
-          <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setIsSettingUp(false)}
-                className="text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200"
-              >
-                ← Back
-              </button>
-              <div>
-                <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">CBT Setup</span>
-                <h2 className="text-xl font-bold text-slate-900">{selectedSubject}</h2>
-              </div>
-            </div>
-
-            {/* Subject Selector Dropdown */}
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-bold text-slate-500">Subject:</label>
+          <form onSubmit={handleLaunchCbt} className="space-y-4">
+            {/* Exam Year / Mode */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-600">
+                Exam Year / Mode
+              </label>
               <select
-                value={selectedSubject}
-                onChange={(e) => setSelectedSubject(e.target.value)}
-                className="bg-slate-50 border border-slate-200 text-slate-800 font-bold text-sm rounded-xl px-3 py-2 outline-none focus:border-blue-500 cursor-pointer"
+                value={examYearMode}
+                onChange={(e) => setExamYearMode(e.target.value)}
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {subjects.map((s) => (
-                  <option key={s.name} value={s.name}>
-                    {s.name}
-                  </option>
-                ))}
+                <option value="Random Questions">🎲 Random Questions</option>
+                <option value="2023">2023 Past Questions</option>
+                <option value="2022">2022 Past Questions</option>
+                <option value="2021">2021 Past Questions</option>
+                <option value="2020">2020 Past Questions</option>
+                <option value="2019">2019 Past Questions</option>
               </select>
             </div>
-          </div>
 
-          {/* Mode Selector */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-              Select Mode:
-            </label>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Practice Mode Card */}
-              <div
-                onClick={() => setMode('practice')}
-                className={`cursor-pointer rounded-2xl p-5 border-2 transition-all ${
-                  mode === 'practice'
-                    ? 'border-blue-500 bg-blue-50/30 shadow-sm'
-                    : 'border-slate-100 bg-slate-50/50 hover:border-slate-200'
-                }`}
-              >
-                <div className="flex justify-between items-center mb-2">
-                  <span className="font-bold text-slate-900 text-sm">Practice Mode</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-700">
-                    Unlocked
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500">Instant corrections, answer key & detailed explanations.</p>
-              </div>
-
-              {/* Exam Mode Card with Feature Breakdown */}
-              <div
-                onClick={() => {
-                  if (isActivated) {
-                    setMode('exam');
-                  } else {
-                    onOpenActivation();
-                  }
-                }}
-                className={`cursor-pointer rounded-2xl p-5 border-2 transition-all flex flex-col justify-between ${
-                  mode === 'exam'
-                    ? 'border-blue-500 bg-blue-50/30 shadow-sm'
-                    : 'border-slate-100 bg-slate-50/50 hover:border-slate-200'
-                }`}
-              >
-                <div>
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="font-bold text-slate-900 text-sm">Exam Mode</span>
-                    {isActivated ? (
-                      <span className="text-[11px] font-extrabold px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-sm flex items-center gap-1">
-                        ✓ Unlocked
-                      </span>
-                    ) : (
-                      <span className="text-[11px] font-black px-2.5 py-1 rounded-md bg-amber-500 text-white shadow-md ring-2 ring-amber-300 flex items-center gap-1 animate-bounce">
-                        🔒 Activation Required
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Feature Checklist */}
-                  <ul className="space-y-1.5 text-xs text-slate-600 mb-4">
-                    <li className="flex items-center gap-2">
-                      <span className="text-blue-500 font-bold">✓</span> Standard Exam Simulation
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="text-blue-500 font-bold">✓</span> Access to Live AI Tutor
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="text-blue-500 font-bold">✓</span> Downloadable Study Materials
-                    </li>
-                  </ul>
-                </div>
-
-                {!isActivated && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenActivation();
-                    }}
-                    className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md hover:shadow-lg transition transform hover:-translate-y-0.5 animate-pulse"
-                  >
-                    ⚡ Activate Exam Mode Now
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Exam Configuration: Year, Duration, Total Questions */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Exam Year / Mode</label>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 cursor-pointer font-medium"
-              >
-                {years.map((y) => (
-                  <option key={y} value={y}>
-                    {y === 'Random' ? '🎲 Random Questions' : `${y} Past Questions`}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Duration (Hours)</label>
+            {/* Duration (Hours) */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-600">
+                Duration (Hours)
+              </label>
               <input
                 type="number"
                 min="0"
                 max="5"
-                value={hours}
-                onChange={(e) => setHours(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 outline-none focus:border-blue-500"
+                value={durationHours}
+                onChange={(e) => setDurationHours(e.target.value)}
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Duration (Minutes)</label>
+
+            {/* Duration (Minutes) */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-600">
+                Duration (Minutes)
+              </label>
               <input
                 type="number"
                 min="0"
                 max="59"
-                value={minutes}
-                onChange={(e) => setMinutes(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 outline-none focus:border-blue-500"
+                value={durationMinutes}
+                onChange={(e) => setDurationMinutes(e.target.value)}
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Total Questions</label>
+
+            {/* Total Questions */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-600">
+                Total Questions
+              </label>
               <input
                 type="number"
+                min="5"
+                max="100"
                 value={totalQuestions}
                 onChange={(e) => setTotalQuestions(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-800 outline-none focus:border-blue-500"
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-          </div>
 
-          {/* Launch Exam Button */}
-          <button
-            type="button"
-            onClick={handleStartExamSubmit}
-            className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm transition shadow-md active:scale-[0.99]"
-          >
-            Start {selectedSubject} ({selectedYear === 'Random' ? 'Random' : selectedYear}) - {mode === 'exam' ? 'Exam Mode' : 'Practice Mode'}
-          </button>
+            {/* Submit Button */}
+            <button
+              type="submit"
+              className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-2xl shadow-lg transition"
+            >
+              Start {selectedSubject} ({examYearMode.includes('Random') ? 'Random' : examYearMode}) - Practice Mode
+            </button>
+          </form>
         </div>
       )}
+
+      {/* 5. ACTION REQUIRED BANNER (ON HOMESCREEN ONLY) */}
+      {!isActivated && (
+        <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-amber-200 pb-4">
+            <div>
+              <h4 className="text-xs font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                ⚠️ Action Required: Activate Exam Mode
+              </h4>
+              <p className="text-xs text-amber-800 font-medium mt-0.5">
+                Unlock full platform capabilities and expert exam tools:
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onOpenActivation}
+              className="w-full sm:w-auto px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs rounded-2xl shadow transition whitespace-nowrap"
+            >
+              Unlock Now
+            </button>
+          </div>
+
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-amber-950 font-semibold">
+            <li className="flex items-center gap-2">
+              <span className="text-emerald-600 font-bold">✓</span> Full timed mock examinations with official JAMB grading algorithms
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="text-emerald-600 font-bold">✓</span> Access to Comprehensive study materials
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="text-emerald-600 font-bold">✓</span> Live AI Tutor / Fully Trained Expert System
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="text-emerald-600 font-bold">✓</span> One-on-One online Tutorial
+            </li>
+          </ul>
+        </div>
+      )}
+
+      {/* 6. EMBEDDED INLINE DASHBOARD */}
+      <DashboardView
+        userProfile={userProfile}
+        history={history}
+        onStartWeaknessDrill={onStartWeaknessDrill}
+      />
     </div>
   );
 }
