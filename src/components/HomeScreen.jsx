@@ -21,6 +21,9 @@ const SUBJECT_LIST = [
   { name: 'Igbo', icon: '🗣️' },
 ];
 
+// Generate years array dynamically from 2026 down to 2005
+const EXAM_YEARS = Array.from({ length: 2026 - 2005 + 1 }, (_, i) => (2026 - i).toString());
+
 export default function HomeScreen({
   userProfile,
   history = [],
@@ -71,7 +74,7 @@ export default function HomeScreen({
   return (
     <div className="space-y-6 max-w-5xl mx-auto px-4 sm:px-6 font-sans">
       
-      {/* 1. TOP HERO SECTION (2-COLUMN GRID ON DESKTOP) */}
+      {/* TOP HERO SECTION */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         
         {/* SBEDTECH CBT PORTAL HEADER CARD */}
@@ -145,11 +148,11 @@ export default function HomeScreen({
                     className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="Random Questions">🎲 Random Questions</option>
-                    <option value="2023">2023 Past Questions</option>
-                    <option value="2022">2022 Past Questions</option>
-                    <option value="2021">2021 Past Questions</option>
-                    <option value="2020">2020 Past Questions</option>
-                    <option value="2019">2019 Past Questions</option>
+                    {EXAM_YEARS.map((yr) => (
+                      <option key={yr} value={yr}>
+                        {yr} Past Questions
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -243,7 +246,7 @@ export default function HomeScreen({
         )}
       </div>
 
-      {/* 2. EMBEDDED INLINE DASHBOARD */}
+      {/* EMBEDDED INLINE DASHBOARD */}
       <DashboardView
         userProfile={userProfile}
         history={history}
