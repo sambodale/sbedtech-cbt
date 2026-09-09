@@ -3,7 +3,7 @@ import Header from './components/Header';
 import HomeScreen from './components/HomeScreen';
 import SignUpModal from './components/SignUpModal';
 import ExamHistoryModal from './components/ExamHistoryModal';
-import DashboardModal from './components/DashboardModal';
+import DashboardModal from './components/DashboardView';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase/config';
 import { getUserProfile } from './services/authServices';
