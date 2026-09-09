@@ -3,12 +3,33 @@ import Header from './components/Header';
 import HomeScreen from './components/HomeScreen';
 import SignUpModal from './components/SignUpModal';
 import ExamHistoryModal from './components/ExamHistoryModal';
+import AiTutorModal from './components/AiTutorModal';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase/config';
 import { getUserProfile } from './services/authServices';
 import { saveExamResult, getUserExamHistory } from './services/examServices';
 
 const QuestionCard = lazy(() => import('./components/QuestionCard'));
+
+// JAMB UTME Official Prescribed Reading Texts mapping for Use of English
+export const JAMB_ENGLISH_NOVELS = {
+  '2011': 'The Virtuous Woman',
+  '2012': 'The Successors',
+  '2013': 'The Successors',
+  '2014': 'The Successors',
+  '2015': "The Potter's Wheel",
+  '2016': 'The Last Days at Forcados High School',
+  '2017': 'In Dependence',
+  '2018': 'In Dependence',
+  '2019': 'Sweet Sixteen',
+  '2020': 'Sweet Sixteen',
+  '2021': 'The Life Changer',
+  '2022': 'The Life Changer',
+  '2023': 'The Life Changer',
+  '2024': 'The Life Changer',
+  '2025': 'The Life Changer',
+  '2026': 'The Lekki Headmaster',
+};
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -22,6 +43,7 @@ export default function App() {
   // Modals
   const [showSignUp, setShowSignUp] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showAiTutorModal, setShowAiTutorModal] = useState(false);
   
   // Exam state
   const [pendingAction, setPendingAction] = useState(null);
@@ -63,7 +85,7 @@ export default function App() {
     ? { email: currentUser.email, ...firebaseProfile }
     : localUserProfile;
 
-  // Sync History
+  // Sync History & Activation Status
   useEffect(() => {
     const loadUserData = async () => {
       const savedUser = localStorage.getItem('sbedtech_user');
@@ -115,14 +137,21 @@ export default function App() {
     localStorage.setItem('sbedtech_user', JSON.stringify(profileData));
     setShowSignUp(false);
 
-    if (pendingAction && pendingAction.type === 'startExam') {
-      const { params } = pendingAction;
+    if (pendingAction) {
+      if (pendingAction.type === 'startExam') {
+        fetchExamQuestions(pendingAction.params);
+      } else if (pendingAction.type === 'openAiTutor') {
+        if (localActivated) {
+          setShowAiTutorModal(true);
+        } else {
+          handleOpenActivation();
+        }
+      }
       setPendingAction(null);
-      fetchExamQuestions(params);
     }
   };
 
-  const fetchExamQuestions = async ({ subject, year, mode, limit, durationInMinutes }) => {
+  const fetchExamQuestions = async ({ subject, year, topic, mode, limit, durationInMinutes }) => {
     setLoadingQuestions(true);
 
     const subjectMap = {
@@ -160,15 +189,40 @@ export default function App() {
     setExamMode(mode || 'practice');
 
     try {
+      const topicParam = topic ? `&topic=${encodeURIComponent(topic)}` : '';
       const response = await fetch(
-        `/api/get-questions?subject=${encodeURIComponent(cleanSubject)}&year=${encodeURIComponent(year || 'random')}&limit=${limit || 40}`
+        `/api/get-questions?subject=${encodeURIComponent(cleanSubject)}&year=${encodeURIComponent(year || 'random')}${topicParam}&limit=${limit || 40}`
       );
 
       if (response.ok) {
         const result = await response.json();
         
         if (result && result.data && result.data.length > 0) {
-          const formattedQuestions = result.data.map((q) => {
+          let rawQuestions = result.data;
+
+          if (cleanSubject === 'english' && year && year !== 'Random') {
+            const targetNovel = JAMB_ENGLISH_NOVELS[year];
+
+            if (targetNovel) {
+              rawQuestions = rawQuestions.filter((q) => {
+                if (q.category === 'comprehension' || q.passage || q.novel) {
+                  if (q.novel) {
+                    return q.novel.toLowerCase() === targetNovel.toLowerCase();
+                  }
+                  const otherNovels = Object.values(JAMB_ENGLISH_NOVELS).filter(
+                    (n) => n !== targetNovel
+                  );
+                  const queryText = (q.question + ' ' + (q.passage || '')).toLowerCase();
+                  return !otherNovels.some((other) =>
+                    queryText.includes(other.toLowerCase())
+                  );
+                }
+                return true;
+              });
+            }
+          }
+
+          const formattedQuestions = rawQuestions.map((q) => {
             let options = q.option || q.options || {};
 
             if (typeof options === 'object' && !Array.isArray(options)) {
@@ -184,7 +238,9 @@ export default function App() {
               ...q,
               question: q.question || q.questionText || '',
               options,
-              answer: q.answer || q.correctAnswer || ''
+              answer: q.answer || q.correctAnswer || '',
+              prescribedText:
+                cleanSubject === 'english' ? JAMB_ENGLISH_NOVELS[year] || null : null,
             };
           });
 
@@ -217,10 +273,26 @@ export default function App() {
     fetchExamQuestions(params);
   };
 
+  const handleOpenAiTutor = () => {
+    if (!currentUser && !localUserProfile) {
+      setPendingAction({ type: 'openAiTutor' });
+      setShowSignUp(true);
+      return;
+    }
+
+    if (!localActivated) {
+      handleOpenActivation();
+      return;
+    }
+
+    setShowAiTutorModal(true);
+  };
+
   const handleStartWeaknessDrill = (targetSubject) => {
     handleStartExam({
       subject: targetSubject || 'Use of English',
       year: 'Random',
+      topic: '',
       mode: 'practice',
       limit: 20,
       durationInMinutes: 30,
@@ -327,6 +399,7 @@ export default function App() {
             onOpenSignUp={() => setShowSignUp(true)}
             onOpenActivation={handleOpenActivation}
             onOpenHistory={() => setShowHistoryModal(true)}
+            onOpenAiTutor={handleOpenAiTutor}
           />
         ) : (
           <Suspense
@@ -354,10 +427,17 @@ export default function App() {
           onSave={handleSaveProfile}
           onSuccess={() => {
             setShowSignUp(false);
-            if (pendingAction && pendingAction.type === 'startExam') {
-              const { params } = pendingAction;
+            if (pendingAction) {
+              if (pendingAction.type === 'startExam') {
+                fetchExamQuestions(pendingAction.params);
+              } else if (pendingAction.type === 'openAiTutor') {
+                if (localActivated) {
+                  setShowAiTutorModal(true);
+                } else {
+                  handleOpenActivation();
+                }
+              }
               setPendingAction(null);
-              fetchExamQuestions(params);
             }
           }}
         />
@@ -367,6 +447,14 @@ export default function App() {
         <ExamHistoryModal
           history={examHistory}
           onClose={() => setShowHistoryModal(false)}
+        />
+      )}
+
+      {showAiTutorModal && (
+        <AiTutorModal
+          isOpen={showAiTutorModal}
+          onClose={() => setShowAiTutorModal(false)}
+          userProfile={activeUserProfile}
         />
       )}
     </div>

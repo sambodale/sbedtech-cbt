@@ -21,7 +21,152 @@ const SUBJECT_LIST = [
   { name: 'Igbo', icon: '🗣️' },
 ];
 
-// Generate years array dynamically from 2026 down to 2005
+const SUBJECT_TOPICS = {
+  'Use of English': [
+    'Comprehension & Summary',
+    'Lexis & Structure',
+    'Oral English (Vowels, Consonants, Stress & Rhymes)',
+    'Grammar & Sentence Construction',
+    'Vocabulary Development (Synonyms, Antonyms, Idioms)',
+    'The Lekki Headmaster (2026 Reading Text)',
+  ],
+  'Mathematics': [
+    'Number & Numeration (Number Bases, Fractions, Indices, Logarithms, Surds, Sets)',
+    'Algebra (Polynomials, Factorization, Equations, Variation, Binary Operations)',
+    'Geometry & Mensuration (Angles, Circles, Polygons, Coordinate Geometry, Areas & Volumes)',
+    'Trigonometry (Ratios, Identities, Angles of Elevation/Depression, Sine & Cosine Rules)',
+    'Calculus (Differentiation, Integration, Rates of Change, Maxima & Minima)',
+    'Statistics & Probability (Central Tendency, Dispersion, Permutation & Combination)',
+  ],
+  'Physics': [
+    "Mechanics (Motion, Newton's Laws, Equilibrium, Work, Energy & Power, Simple Harmonic Motion)",
+    'Properties of Matter (Density, Elasticity, Surface Tension, Viscosity)',
+    'Thermal Physics (Temperature, Thermal Expansion, Heat Transfer, Gas Laws)',
+    'Waves, Optics & Sound (Wave Properties, Light, Optical Instruments, Sound Waves)',
+    'Electricity & Magnetism (Electrostatics, Current Electricity, Electromagnetic Induction, AC)',
+    'Modern/Atomic Physics (Atomic Structure, Radioactivity, Nuclear Reactions)',
+  ],
+  'Chemistry': [
+    'Atomic Structure & Chemical Bonding',
+    'Stoichiometry & Chemical Equations',
+    'States of Matter & Energy Changes',
+    'Chemical Kinetics & Equilibrium',
+    'Acids, Bases & Salts',
+    'Periodicity & Inorganic Chemistry (Groups I–VII, Transition Metals)',
+    'Organic Chemistry (Hydrocarbons, Alkanols, Alkanoic Acids, Polymers)',
+    'Electrochemistry',
+  ],
+  'Biology': [
+    'Cell Biology & Classification of Living Things',
+    'Plant Nutrition, Transport & Reproduction',
+    'Animal Nutrition, Transport, Respiration & Excretion',
+    'Nervous Coordination & Reproductive Systems',
+    'Genetics, Variation & Evolution',
+    'Ecology (Ecosystems, Energy Flow, Population, Pollution & Conservation)',
+  ],
+  'Economics': [
+    'Basic Economic Concepts & Economic Systems',
+    'Production, Distribution & Consumption',
+    'Consumer Behaviour & Demand/Supply',
+    'Market Structures (Perfect Competition, Monopoly, Oligopoly)',
+    'National Income & Economic Development',
+    'Money & Banking',
+    'Public Finance (Government Revenue, Expenditure & Taxation)',
+    'International Trade & Balance of Payments',
+  ],
+  'Government': [
+    'Basic Concepts in Government (Power, Authority, Sovereignty, Constitution)',
+    'Political Structure & Constitution (Arms of Government, Separation of Powers)',
+    'Nigerian Political History (Colonial Rule, Independence, Military Rule)',
+    'Public Administration & Local Government',
+    'Political Parties & Electoral Systems',
+    'International Relations (UN, AU, ECOWAS, Foreign Policy)',
+  ],
+  'Christian Religious Studies (CRS)': [
+    'Sovereignty of God & Creation',
+    'The Patriarchs & Covenant (Leadership in the Old Testament)',
+    'The Prophets & Kingship in Israel',
+    'The Life and Teachings of Jesus Christ',
+    'The Miracles & Parables of Jesus',
+    'The Early Church & the Apostles',
+    'The Missionary Journeys of Paul',
+    'Christian Ethics & Morality',
+  ],
+  'Islamic Religious Studies (IRS)': [
+    'Tawhid & Faith (Belief in Allah)',
+    'The Holy Quran (Revelation, Themes & Interpretation)',
+    'Hadith & Sunnah',
+    'Fiqh (Islamic Jurisprudence & Ibadah)',
+    'Life of the Prophet Muhammad (SAW)',
+    'Islamic History & the Caliphates',
+    'Islamic Culture, Civilization & Ethics',
+  ],
+  'Geography': [
+    'Practical Geography (Map Reading, Scale, Field Survey Techniques)',
+    'Physical Geography (Earth Structure, Landforms, Weather & Climate)',
+    'Human Geography (Population, Settlement, Migration)',
+    'Economic Geography (Agriculture, Industry, Trade, Transport)',
+    'Geography of Nigeria & Regional Geography of Africa',
+    'Environmental Issues & Resource Management',
+  ],
+  'Financial Accounting': [
+    'Basic Accounting Concepts & Principles',
+    'Source Documents & Books of Original Entry',
+    'The Ledger, Trial Balance & Correction of Errors',
+    'Final Accounts of Sole Traders',
+    'Partnership Accounts',
+    'Company Accounts',
+    'Manufacturing Accounts',
+    'Public Sector (Government) Accounting',
+    'Accounting Ratios & Interpretation of Accounts',
+  ],
+  'Commerce': [
+    'Introduction to Commerce (Trade & Production)',
+    'Home & Foreign Trade',
+    'Aids/Auxiliaries to Trade (Banking, Insurance, Transport, Warehousing)',
+    'Business Units & Forms of Business Organization',
+    'The Stock Exchange & Money Market',
+    'Legal Aspects of Business',
+    'Population & Its Effect on Commerce',
+    'Government & Business (Public Enterprises)',
+  ],
+  'Literature in English': [
+    'Literary Terms & Appreciation (Devices, Genres, Figures of Speech)',
+    'African Prose',
+    'Non-African Prose',
+    'Drama (African & Non-African Plays)',
+    'Poetry (African & Non-African Poems)',
+  ],
+  'Agricultural Science': [
+    'Crop Production & Crop Protection',
+    'Animal Husbandry & Livestock Production',
+    'Soil Science (Formation, Properties & Fertility)',
+    'Farm Management & Agricultural Economics',
+    'Agricultural Extension & Rural Sociology',
+    'Farm Mechanization & Agricultural Engineering',
+    'Forestry, Fisheries & Wildlife',
+    'Agro-allied Processing & Marketing',
+  ],
+  'Yoruba': [
+    'Àpòpọ̀ Èdè (Grammar & Structure)',
+    'Àṣà àti Ìṣe Ìbílẹ̀ (Culture & Tradition)',
+    'Lítíréṣọ̀ (Oral & Written Literature)',
+    'Ìtàn Àwọn Yorùbá (History of the Yoruba)',
+  ],
+  'Hausa': [
+    'Grama (Grammar & Structure)',
+    "Al'adu (Culture & Tradition)",
+    'Adabi (Oral & Written Literature)',
+    'Tarihin Hausawa (History of the Hausa)',
+  ],
+  'Igbo': [
+    'Ụtọasụsụ (Grammar & Structure)',
+    'Omenala na Ọdịnala (Culture & Tradition)',
+    'Mmemme Agụmagụ (Oral & Written Literature)',
+    'Akụkọ Ndị Igbo (History of the Igbo)',
+  ],
+};
+
 const EXAM_YEARS = Array.from({ length: 2026 - 2005 + 1 }, (_, i) => (2026 - i).toString());
 
 export default function HomeScreen({
@@ -32,12 +177,14 @@ export default function HomeScreen({
   onStartWeaknessDrill,
   onOpenActivation,
   onOpenHistory,
+  onOpenAiTutor, // Callback function to launch the AI Expert Tutor
 }) {
   const [selectedSubject, setSelectedSubject] = useState('');
   const [showSetupPanel, setShowSetupPanel] = useState(false);
 
   // CBT Setup form states
   const [examYearMode, setExamYearMode] = useState('Random Questions');
+  const [selectedTopic, setSelectedTopic] = useState('All Topics');
   const [durationHours, setDurationHours] = useState('1');
   const [durationMinutes, setDurationMinutes] = useState('30');
   const [totalQuestions, setTotalQuestions] = useState('40');
@@ -45,6 +192,7 @@ export default function HomeScreen({
   const handleSubjectChange = (e) => {
     const subjectName = e.target.value;
     setSelectedSubject(subjectName);
+    setSelectedTopic('All Topics');
     if (subjectName) {
       setShowSetupPanel(true);
     }
@@ -66,15 +214,18 @@ export default function HomeScreen({
       subject: selectedSubject,
       mode: 'practice',
       year: cleanYear || 'Random',
+      topic: selectedTopic === 'All Topics' ? '' : selectedTopic,
       durationInMinutes: totalDuration,
       limit: parseInt(totalQuestions, 10) || 40,
     });
   };
 
+  const availableTopics = SUBJECT_TOPICS[selectedSubject] || [];
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto px-4 sm:px-6 font-sans">
       
-      {/* TOP HERO SECTION */}
+      {/* 1. TOP HERO SECTION */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         
         {/* SBEDTECH CBT PORTAL HEADER CARD */}
@@ -138,6 +289,8 @@ export default function HomeScreen({
 
             <form onSubmit={handleLaunchCbt} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                {/* Exam Year / Mode */}
                 <div className="space-y-1 sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-600">
                     Exam Year / Mode
@@ -156,6 +309,26 @@ export default function HomeScreen({
                   </select>
                 </div>
 
+                {/* Topic Selector Filter */}
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-600">
+                    Filter by Topic (Optional)
+                  </label>
+                  <select
+                    value={selectedTopic}
+                    onChange={(e) => setSelectedTopic(e.target.value)}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="All Topics">📚 All Topics (Full Syllabus)</option>
+                    {availableTopics.map((top) => (
+                      <option key={top} value={top}>
+                        🎯 {top}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Duration Hours */}
                 <div className="space-y-1">
                   <label className="block text-xs font-bold text-slate-600">
                     Duration (Hours)
@@ -170,6 +343,7 @@ export default function HomeScreen({
                   />
                 </div>
 
+                {/* Duration Minutes */}
                 <div className="space-y-1">
                   <label className="block text-xs font-bold text-slate-600">
                     Duration (Minutes)
@@ -184,6 +358,7 @@ export default function HomeScreen({
                   />
                 </div>
 
+                {/* Total Questions */}
                 <div className="space-y-1 sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-600">
                     Total Questions
@@ -203,7 +378,7 @@ export default function HomeScreen({
                 type="submit"
                 className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-2xl shadow-md transition"
               >
-                Start {selectedSubject} ({examYearMode.includes('Random') ? 'Random' : examYearMode}) - Practice Mode
+                Start {selectedSubject} ({selectedTopic !== 'All Topics' ? selectedTopic : examYearMode}) - Practice Mode
               </button>
             </form>
           </div>
@@ -246,7 +421,64 @@ export default function HomeScreen({
         )}
       </div>
 
-      {/* EMBEDDED INLINE DASHBOARD */}
+      {/* 2. SBEDTECH AI EXPERT TUTOR HYBRID CARD (RIGHT ABOVE DASHBOARD) */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 rounded-3xl p-6 sm:p-7 text-white shadow-xl border border-indigo-800/40 relative overflow-hidden">
+        {/* Background Accent Glow */}
+        <div className="absolute -top-12 -right-12 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
+          
+          {/* Card Left Header Details */}
+          <div className="space-y-2.5 max-w-xl">
+            <div className="flex items-center gap-2.5">
+              <span className="px-3 py-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-[10px] font-black uppercase tracking-wider rounded-full shadow-sm">
+                NERDC Aligned
+              </span>
+              <span className="px-2.5 py-1 bg-white/10 text-slate-300 text-[10px] font-extrabold uppercase tracking-wider rounded-full backdrop-blur-md">
+                WAEC • NECO • UTME
+              </span>
+            </div>
+
+            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+              <span>🤖</span> SbedTech AI Expert Tutor
+            </h2>
+
+            <p className="text-xs sm:text-sm font-normal text-slate-300 leading-relaxed">
+              Trained on the Nigerian NERDC curriculum across all subjects. Get exact Performance Objectives, WAEC/NECO theory breakdowns, and UTME speed strategies using localized real-world examples.
+            </p>
+          </div>
+
+          {/* Card Right Action Area */}
+          <div className="w-full md:w-auto flex flex-col items-stretch md:items-end gap-2 shrink-0">
+            {isActivated ? (
+              <button
+                type="button"
+                onClick={onOpenAiTutor}
+                className="w-full md:w-auto px-7 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs sm:text-sm rounded-2xl shadow-lg hover:shadow-indigo-500/25 transition-all duration-200 flex items-center justify-center gap-2 group"
+              >
+                <span>Ask AI Expert Tutor</span>
+                <span className="group-hover:translate-x-1 transition-transform">→</span>
+              </button>
+            ) : (
+              <div className="space-y-2 w-full md:w-auto">
+                <button
+                  type="button"
+                  onClick={onOpenActivation}
+                  className="w-full md:w-auto px-7 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-2xl shadow-md transition flex items-center justify-center gap-2"
+                >
+                  <span>🔒 Unlock AI Tutor Access</span>
+                </button>
+                <p className="text-[10px] text-amber-200/80 text-center md:text-right font-medium">
+                  Requires Exam Mode Activation
+                </p>
+              </div>
+            )}
+          </div>
+
+        </div>
+      </div>
+
+      {/* 3. EMBEDDED INLINE DASHBOARD */}
       <DashboardView
         userProfile={userProfile}
         history={history}
