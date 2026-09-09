@@ -3,7 +3,6 @@ import Header from './components/Header';
 import HomeScreen from './components/HomeScreen';
 import SignUpModal from './components/SignUpModal';
 import ExamHistoryModal from './components/ExamHistoryModal';
-import DashboardModal from './components/DashboardView';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase/config';
 import { getUserProfile } from './services/authServices';
@@ -16,16 +15,15 @@ export default function App() {
   const [firebaseProfile, setFirebaseProfile] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
 
-  // Local fallback states for guests/offline usage
+  // Local fallback states
   const [localUserProfile, setLocalUserProfile] = useState(null);
   const [localActivated, setLocalActivated] = useState(false);
   
-  // Modal visibility controls
+  // Modals
   const [showSignUp, setShowSignUp] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [showDashboardModal, setShowDashboardModal] = useState(false);
   
-  // Interceptor & Exam state
+  // Exam state
   const [pendingAction, setPendingAction] = useState(null);
   const [activeSubject, setActiveSubject] = useState('');
   const [examMode, setExamMode] = useState('practice');
@@ -33,14 +31,14 @@ export default function App() {
   const [examStarted, setExamStarted] = useState(false);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
 
-  // Exam performance tracking state
+  // History tracking
   const [examHistory, setExamHistory] = useState([]);
 
-  // Timer state management
+  // Timer state
   const [timeLeft, setTimeLeft] = useState(null);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
 
-  // Auth Listener & Firestore Profile Fetching
+  // Auth Listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
@@ -60,14 +58,12 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Combine Firebase Profile with Local Profile
+  // Combined Active Profile
   const activeUserProfile = currentUser 
     ? { email: currentUser.email, ...firebaseProfile }
     : localUserProfile;
 
-  const isUserActivated = localActivated;
-
-  // Sync LocalStorage & Firebase Exam History
+  // Sync History
   useEffect(() => {
     const loadUserData = async () => {
       const savedUser = localStorage.getItem('sbedtech_user');
@@ -96,7 +92,7 @@ export default function App() {
     loadUserData();
   }, [currentUser]);
 
-  // Timer countdown effect
+  // Timer Countdown Effect
   useEffect(() => {
     if (!isTimerRunning || timeLeft === null) return;
 
@@ -126,10 +122,29 @@ export default function App() {
     }
   };
 
-  const fetchExamQuestions = async ({ subject, year, mode, limit, duration, durationInMinutes }) => {
+  const fetchExamQuestions = async ({ subject, year, mode, limit, durationInMinutes }) => {
     setLoadingQuestions(true);
 
     const subjectMap = {
+      'use of english': 'english',
+      'english': 'english',
+      'mathematics': 'mathematics',
+      'maths': 'mathematics',
+      'physics': 'physics',
+      'chemistry': 'chemistry',
+      'biology': 'biology',
+      'economics': 'economics',
+      'government': 'government',
+      'christian religious studies (crs)': 'crs',
+      'crs': 'crs',
+      'geography': 'geography',
+      'financial accounting': 'accounting',
+      'commerce': 'commerce',
+      'literature in english': 'literature',
+      'islamic religious studies (irs)': 'irs',
+      'irs': 'irs',
+      'agricultural science': 'agricultural-science',
+      'agric': 'agricultural-science',
       'yoruba': 'yoruba',
       'yorùbá': 'yoruba',
       'yòrùbá': 'yoruba',
@@ -175,7 +190,7 @@ export default function App() {
 
           setQuestions(formattedQuestions);
 
-          const totalMinutes = parseInt(durationInMinutes || duration, 10) || 90;
+          const totalMinutes = parseInt(durationInMinutes, 10) || 90;
           setTimeLeft(totalMinutes * 60);
           setIsTimerRunning(true);
 
@@ -186,7 +201,7 @@ export default function App() {
       throw new Error(`No questions returned for ${subject}.`);
     } catch (error) {
       console.error('Error fetching questions:', error);
-      alert(`Could not fetch questions for ${subject}. Please check your network connection or try selecting a specific year.`);
+      alert(`Could not fetch questions for ${subject}. Please check your network connection or try selecting a different year.`);
     } finally {
       setLoadingQuestions(false);
     }
@@ -203,7 +218,6 @@ export default function App() {
   };
 
   const handleStartWeaknessDrill = (targetSubject) => {
-    setShowDashboardModal(false);
     handleStartExam({
       subject: targetSubject || 'Use of English',
       year: 'Random',
@@ -306,12 +320,13 @@ export default function App() {
         ) : !examStarted ? (
           <HomeScreen
             userProfile={activeUserProfile}
-            isActivated={isUserActivated}
+            history={examHistory}
+            isActivated={localActivated}
             onStartExam={handleStartExam}
+            onStartWeaknessDrill={handleStartWeaknessDrill}
             onOpenSignUp={() => setShowSignUp(true)}
             onOpenActivation={handleOpenActivation}
             onOpenHistory={() => setShowHistoryModal(true)}
-            onOpenDashboard={() => setShowDashboardModal(true)}
           />
         ) : (
           <Suspense
@@ -352,15 +367,6 @@ export default function App() {
         <ExamHistoryModal
           history={examHistory}
           onClose={() => setShowHistoryModal(false)}
-        />
-      )}
-
-      {showDashboardModal && (
-        <DashboardModal
-          userProfile={activeUserProfile}
-          history={examHistory}
-          onClose={() => setShowDashboardModal(false)}
-          onStartWeaknessDrill={handleStartWeaknessDrill}
         />
       )}
     </div>
