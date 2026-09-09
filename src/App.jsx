@@ -8,6 +8,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase/config';
 import { getUserProfile } from './services/authServices';
 import { saveExamResult, getUserExamHistory } from './services/examServices';
+import { generateTopicQuestions } from './services/aiQuestionGenerator';
 
 const QuestionCard = lazy(() => import('./components/QuestionCard'));
 
@@ -175,11 +176,8 @@ export default function App() {
       'agricultural science': 'agricultural-science',
       'agric': 'agricultural-science',
       'yoruba': 'yoruba',
-      'yorùbá': 'yoruba',
-      'yòrùbá': 'yoruba',
       'igbo': 'igbo',
-      'ìgbò': 'igbo',
-      'hausa': 'hausa'
+      'hausa': 'hausa',
     };
 
     const rawSubject = (subject || '').toLowerCase().trim();
@@ -189,75 +187,86 @@ export default function App() {
     setExamMode(mode || 'practice');
 
     try {
-      const topicParam = topic ? `&topic=${encodeURIComponent(topic)}` : '';
+      const topicParam = topic && topic !== 'All Topics' ? `&topic=${encodeURIComponent(topic)}` : '';
       const response = await fetch(
         `/api/get-questions?subject=${encodeURIComponent(cleanSubject)}&year=${encodeURIComponent(year || 'random')}${topicParam}&limit=${limit || 40}`
       );
 
+      let fetchedQuestions = [];
+
       if (response.ok) {
         const result = await response.json();
-        
         if (result && result.data && result.data.length > 0) {
-          let rawQuestions = result.data;
-
-          if (cleanSubject === 'english' && year && year !== 'Random') {
-            const targetNovel = JAMB_ENGLISH_NOVELS[year];
-
-            if (targetNovel) {
-              rawQuestions = rawQuestions.filter((q) => {
-                if (q.category === 'comprehension' || q.passage || q.novel) {
-                  if (q.novel) {
-                    return q.novel.toLowerCase() === targetNovel.toLowerCase();
-                  }
-                  const otherNovels = Object.values(JAMB_ENGLISH_NOVELS).filter(
-                    (n) => n !== targetNovel
-                  );
-                  const queryText = (q.question + ' ' + (q.passage || '')).toLowerCase();
-                  return !otherNovels.some((other) =>
-                    queryText.includes(other.toLowerCase())
-                  );
-                }
-                return true;
-              });
-            }
-          }
-
-          const formattedQuestions = rawQuestions.map((q) => {
-            let options = q.option || q.options || {};
-
-            if (typeof options === 'object' && !Array.isArray(options)) {
-              options = {
-                a: options.a || q.optionA || q.a || '',
-                b: options.b || q.optionB || q.b || '',
-                c: options.c || q.optionC || q.c || '',
-                d: options.d || q.optionD || q.d || '',
-              };
-            }
-
-            return {
-              ...q,
-              question: q.question || q.questionText || '',
-              options,
-              answer: q.answer || q.correctAnswer || '',
-              prescribedText:
-                cleanSubject === 'english' ? JAMB_ENGLISH_NOVELS[year] || null : null,
-            };
-          });
-
-          setQuestions(formattedQuestions);
-
-          const totalMinutes = parseInt(durationInMinutes, 10) || 90;
-          setTimeLeft(totalMinutes * 60);
-          setIsTimerRunning(true);
-
-          setExamStarted(true);
-          return;
+          fetchedQuestions = result.data;
         }
       }
-      throw new Error(`No questions returned for ${subject}.`);
+
+      // Filter by Official JAMB Prescribed Text for English
+      if (cleanSubject === 'english') {
+        const selectedYear = (year === 'Random' || !year) ? '2026' : year;
+        const targetNovel = JAMB_ENGLISH_NOVELS[selectedYear] || 'The Lekki Headmaster';
+
+        fetchedQuestions = fetchedQuestions.filter((q) => {
+          if (q.category === 'comprehension' || q.passage || q.novel || (topic && topic.includes('Lekki Headmaster'))) {
+            if (q.novel) return q.novel.toLowerCase() === targetNovel.toLowerCase();
+
+            const otherNovels = Object.values(JAMB_ENGLISH_NOVELS).filter((n) => n !== targetNovel);
+            const queryText = (q.question + ' ' + (q.passage || '')).toLowerCase();
+            return !otherNovels.some((other) => queryText.includes(other.toLowerCase()));
+          }
+          return true;
+        });
+      }
+
+      // AI Expert Tutor Fallback: Generate JAMB UTME questions if database returned no results
+      if (fetchedQuestions.length === 0) {
+        console.log(`No database questions found for ${cleanSubject} under "${topic || 'General Syllabus'}". Generating via AI Tutor...`);
+        fetchedQuestions = await generateTopicQuestions({
+          subject: cleanSubject,
+          topic: topic || 'General JAMB Syllabus',
+          limit: parseInt(limit, 10) || 20,
+          year: year || '2026',
+          examType: 'UTME',
+        });
+      }
+
+      if (fetchedQuestions.length > 0) {
+        const formattedQuestions = fetchedQuestions.map((q) => {
+          let options = q.option || q.options || {};
+
+          if (typeof options === 'object' && !Array.isArray(options)) {
+            options = {
+              a: options.a || q.optionA || q.a || '',
+              b: options.b || q.optionB || q.b || '',
+              c: options.c || q.optionC || q.c || '',
+              d: options.d || q.optionD || q.d || '',
+            };
+          }
+
+          const selectedYear = (year === 'Random' || !year) ? '2026' : year;
+
+          return {
+            ...q,
+            question: q.question || q.questionText || '',
+            options,
+            answer: q.answer || q.correctAnswer || '',
+            prescribedText: cleanSubject === 'english' ? (JAMB_ENGLISH_NOVELS[selectedYear] || 'The Lekki Headmaster') : null,
+          };
+        });
+
+        setQuestions(formattedQuestions);
+
+        const totalMinutes = parseInt(durationInMinutes, 10) || 90;
+        setTimeLeft(totalMinutes * 60);
+        setIsTimerRunning(true);
+        setExamStarted(true);
+        return;
+      }
+
+      throw new Error('Could not retrieve or generate questions.');
     } catch (error) {
       console.error('Error fetching questions:', error);
-      alert(`Could not fetch questions for ${subject}. Please check your network connection or try selecting a different year.`);
+      alert(`Could not fetch questions for ${subject}. Generating AI topic drill...`);
     } finally {
       setLoadingQuestions(false);
     }
@@ -291,7 +300,7 @@ export default function App() {
   const handleStartWeaknessDrill = (targetSubject) => {
     handleStartExam({
       subject: targetSubject || 'Use of English',
-      year: 'Random',
+      year: '2026',
       topic: '',
       mode: 'practice',
       limit: 20,
@@ -386,7 +395,7 @@ export default function App() {
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
             <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             <p className="text-slate-600 font-semibold text-sm">
-              Loading past questions...
+              Fetching questions and aligning with selected JAMB topic...
             </p>
           </div>
         ) : !examStarted ? (
