@@ -382,7 +382,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-800 font-sans">
+    <div className="min-h-screen bg-slate-100 text-slate-800 font-sans w-full overflow-x-hidden">
       <Header
         studentName={getCandidateName()}
         examType={getExamTypeLabel()}
@@ -390,7 +390,8 @@ export default function App() {
         onOpenAuth={() => setShowSignUp(true)}
       />
 
-      <main className="w-full max-w-[1400px] mx-auto px-4 py-6">
+      {/* Main Container updated with flexible width bounds */}
+      <main className="w-full px-2 sm:px-6 lg:px-8 py-6">
         {loadingQuestions ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
             <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -399,17 +400,19 @@ export default function App() {
             </p>
           </div>
         ) : !examStarted ? (
-          <HomeScreen
-            userProfile={activeUserProfile}
-            history={examHistory}
-            isActivated={localActivated}
-            onStartExam={handleStartExam}
-            onStartWeaknessDrill={handleStartWeaknessDrill}
-            onOpenSignUp={() => setShowSignUp(true)}
-            onOpenActivation={handleOpenActivation}
-            onOpenHistory={() => setShowHistoryModal(true)}
-            onOpenAiTutor={handleOpenAiTutor}
-          />
+          <div className="max-w-7xl mx-auto">
+            <HomeScreen
+              userProfile={activeUserProfile}
+              history={examHistory}
+              isActivated={localActivated}
+              onStartExam={handleStartExam}
+              onStartWeaknessDrill={handleStartWeaknessDrill}
+              onOpenSignUp={() => setShowSignUp(true)}
+              onOpenActivation={handleOpenActivation}
+              onOpenHistory={() => setShowHistoryModal(true)}
+              onOpenAiTutor={handleOpenAiTutor}
+            />
+          </div>
         ) : (
           <Suspense
             fallback={
