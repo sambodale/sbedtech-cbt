@@ -12,7 +12,6 @@ export default function QuestionCard({
   const [flaggedQuestions, setFlaggedQuestions] = useState({});
   const [timeLeft, setTimeLeft] = useState(initialTimeInSeconds);
 
-  // Dynamic Subject display (Fallback to question subject or CBT EXAM)
   const displaySubject = subject || questions[0]?.subject || 'CBT EXAM';
   const totalQuestions = questions.length > 0 ? questions.length : 40;
   const currentQ = questions[currentIndex] || {};
@@ -50,11 +49,15 @@ export default function QuestionCard({
   };
 
   return (
-    <div className="w-full max-w-[1400px] mx-auto font-sans">
+    <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 py-2">
+      {/* Container forcing flex layout on desktop screens */}
       <div className="w-full flex flex-col lg:flex-row items-start gap-6">
         
-        {/* MAIN QUESTION DISPLAY */}
-        <div className="w-full lg:w-[73%] bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between shrink-0">
+        {/* LEFT COLUMN: Main Question Area (~72% width) */}
+        <div 
+          className="w-full lg:w-[72%] bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between shrink-0"
+          style={{ minWidth: 0 }}
+        >
           <div>
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
               <div>
@@ -92,7 +95,7 @@ export default function QuestionCard({
                     key={key}
                     type="button"
                     onClick={() => handleSelectOption(key)}
-                    className={`w-full p-4 rounded-2xl border text-left text-xs sm:text-sm font-semibold transition flex items-center gap-4 ${
+                    className={`w-full p-4 rounded-2xl border text-left text-xs sm:text-sm font-semibold transition flex items-center gap-4 cursor-pointer ${
                       isSelected
                         ? 'bg-blue-50 border-blue-600 text-blue-900 ring-2 ring-blue-500/20 shadow-sm'
                         : 'bg-slate-50/50 border-slate-200 text-slate-700 hover:bg-slate-100/80 hover:border-slate-300'
@@ -148,8 +151,11 @@ export default function QuestionCard({
           </div>
         </div>
 
-        {/* 1-TO-N QUESTION MATRIX SIDEBAR */}
-        <div className="w-full lg:w-[27%] bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4 shrink-0">
+        {/* RIGHT COLUMN: Matrix Sidebar (~28% width) */}
+        <div 
+          className="w-full lg:w-[28%] bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4 shrink-0"
+          style={{ minWidth: 0 }}
+        >
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
               Question Matrix
