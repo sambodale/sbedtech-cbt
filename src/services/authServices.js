@@ -1,118 +1,147 @@
 import { 
-  createUserWithEmailAndPassword, 
+  getAuth, 
   signInWithEmailAndPassword, 
-  signOut 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged 
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
-import { auth, db } from "../firebase/config";
+import { 
+  getFirestore, 
+  doc, 
+  getDoc, 
+  setDoc, 
+  serverTimestamp 
+} from 'firebase/firestore';
 
-// Regex patterns for client-side validation
-const NAME_REGEX = /^[a-zA-Z\s]{2,50}$/;
+// Initialize Firebase services (ensure your firebase app config is imported/initialized)
+const auth = getAuth();
+const db = getFirestore();
 
 /**
- * Fetches user profile details from Firestore.
- * @param {string} uid 
+ * Retrieves user profile data along with their assigned role ('admin' | 'student').
+ * @param {string} uid - The Firebase Auth UID of the user.
+ * @returns {Promise<Object>} Profile object including role, fullName, email, etc.
  */
 export const getUserProfile = async (uid) => {
-  if (!uid) return null;
-  try {
-    const userRef = doc(db, "users", uid);
-    const docSnap = await getDoc(userRef);
+  if (!uid) throw new Error('User UID is required to fetch profile');
 
-    if (docSnap.exists()) {
-      return docSnap.data();
+  try {
+    const userDocRef = doc(db, 'users', uid);
+    const userSnapshot = await getDoc(userDocRef);
+
+    if (userSnapshot.exists()) {
+      const data = userSnapshot.data();
+      return {
+        uid,
+        fullName: data.fullName || 'Candidate',
+        email: data.email || '',
+        role: data.role || 'student', // Default to 'student' if role field is missing
+        isActivated: Boolean(data.isActivated),
+        createdAt: data.createdAt || null,
+        ...data,
+      };
+    } else {
+      // Fallback if auth user exists but Firestore profile record is not yet created
+      return {
+        uid,
+        fullName: 'Candidate',
+        email: auth.currentUser?.email || '',
+        role: 'student',
+        isActivated: false,
+      };
     }
-    return null;
   } catch (error) {
-    console.error("Error fetching user profile:", error);
+    console.error('Error fetching user profile:', error);
     throw error;
   }
 };
 
 /**
- * Checks if a user profile exists in Firestore and creates one if missing.
- * Prevents missing profile issues for legacy users who registered before Firestore profile creation was added.
- * @param {Object} user - Firebase Auth user object
- */
-export const ensureUserProfileExists = async (user) => {
-  if (!user) return;
-
-  const userRef = doc(db, "users", user.uid);
-  const docSnap = await getDoc(userRef);
-
-  if (!docSnap.exists()) {
-    await setDoc(userRef, {
-      uid: user.uid,
-      email: user.email || "",
-      fullName: user.displayName || user.email?.split("@")[0] || "Candidate",
-      role: "student",
-      createdAt: serverTimestamp(),
-    });
-  }
-};
-
-/**
- * Registers a new candidate and saves their profile to Firestore.
+ * Signs in a user with email & password and retrieves their profile with role.
  * @param {string} email 
  * @param {string} password 
- * @param {Object} extraData - Additional info (fullName, role, etc.)
+ * @returns {Promise<Object>} Object containing user credentials and profile data.
  */
-export const registerCandidate = async (email, password, extraData = {}) => {
-  try {
-    // 1. Client-side pattern validation
-    if (extraData.fullName && !NAME_REGEX.test(extraData.fullName)) {
-      throw new Error("Full name must contain only letters and be between 2 and 50 characters.");
-    }
-
-    // 2. Create user in Firebase Auth
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-
-    // 3. Save extra user details to Firestore
-    await setDoc(doc(db, "users", user.uid), {
-      uid: user.uid,
-      email: user.email,
-      fullName: extraData.fullName ? extraData.fullName.trim() : "",
-      role: extraData.role || "student",
-      createdAt: serverTimestamp(),
-    });
-
-    return user;
-  } catch (error) {
-    console.error("Error signing up candidate:", error);
-    throw error;
-  }
-};
-
-/**
- * Logs in an existing candidate using Firebase Authentication.
- * Automatically backfills missing Firestore documents for older candidate accounts.
- * @param {string} email 
- * @param {string} password 
- */
-export const loginCandidate = async (email, password) => {
+export const loginUser = async (email, password) => {
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
+    const profile = await getUserProfile(userCredential.user.uid);
 
-    // Automatically check and backfill missing Firestore profile document upon login
-    await ensureUserProfileExists(user);
-
-    return user;
+    return {
+      user: userCredential.user,
+      profile,
+    };
   } catch (error) {
-    console.error("Error signing in candidate:", error);
+    console.error('Login error:', error);
     throw error;
   }
 };
 
 /**
- * Logs out the currently authenticated candidate.
+ * Registers a new user and sets initial profile role in Firestore.
+ * @param {Object} params
+ * @param {string} params.email
+ * @param {string} params.password
+ * @param {string} params.fullName
+ * @param {string} [params.role='student'] Optional role parameter ('student' | 'admin')
+ * @returns {Promise<Object>}
  */
-export const logoutCandidate = async () => {
+export const registerUser = async ({ email, password, fullName, role = 'student' }) => {
+  try {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const uid = userCredential.user.uid;
+
+    const profileData = {
+      uid,
+      fullName,
+      email,
+      role, // Ensures role is stored during account creation
+      isActivated: false,
+      createdAt: serverTimestamp(),
+    };
+
+    // Store in Firestore
+    await setDoc(doc(db, 'users', uid), profileData);
+
+    return {
+      user: userCredential.user,
+      profile: profileData,
+    };
+  } catch (error) {
+    console.error('Registration error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Signs out the current user.
+ */
+export const logoutUser = async () => {
   try {
     await signOut(auth);
   } catch (error) {
-    console.error("Error signing out candidate:", error);
+    console.error('Logout error:', error);
     throw error;
   }
+};
+
+/**
+ * Listens to Auth state changes and returns both the Firebase user and their role-enriched profile.
+ * @param {Function} callback Callback receiving (user, profile)
+ * @returns {Unsubscribe} Firebase unsubscribe function
+ */
+export const subscribeToAuthChanges = (callback) => {
+  return onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      try {
+        const profile = await getUserProfile(user.uid);
+        callback(user, profile);
+      } catch (err) {
+        console.error('Failed to load profile on auth change:', err);
+        callback(user, { uid: user.uid, email: user.email, role: 'student' });
+      }
+    } else {
+      callback(null, null);
+    }
+  });
 };

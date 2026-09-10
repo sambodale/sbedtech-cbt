@@ -172,12 +172,13 @@ const EXAM_YEARS = Array.from({ length: 2026 - 2005 + 1 }, (_, i) => (2026 - i).
 export default function HomeScreen({
   userProfile,
   history = [],
+  stats = {},
   isActivated = false,
   onStartExam,
   onStartWeaknessDrill,
   onOpenActivation,
   onOpenHistory,
-  onOpenAiTutor, // Callback function to launch the AI Expert Tutor
+  onOpenAiTutor,
 }) {
   const [selectedSubject, setSelectedSubject] = useState('');
   const [showSetupPanel, setShowSetupPanel] = useState(false);
@@ -188,6 +189,15 @@ export default function HomeScreen({
   const [durationHours, setDurationHours] = useState('1');
   const [durationMinutes, setDurationMinutes] = useState('30');
   const [totalQuestions, setTotalQuestions] = useState('40');
+
+  // Extract synchronized stats with fallbacks
+  const {
+    totalMockTests = history.length,
+    totalQuestionsSolved = 0,
+    overallAccuracy = 0,
+    predictedJambScore = 0,
+    subjectBreakdown = {},
+  } = stats;
 
   const handleSubjectChange = (e) => {
     const subjectName = e.target.value;
@@ -267,7 +277,7 @@ export default function HomeScreen({
               onClick={onOpenHistory}
               className="px-8 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-2xl shadow-sm transition inline-flex items-center gap-2"
             >
-              📜 Attempt History
+              📜 Attempt History ({totalMockTests})
             </button>
           </div>
         </div>
@@ -421,7 +431,82 @@ export default function HomeScreen({
         )}
       </div>
 
-      {/* 2. SBEDTECH AI EXPERT TUTOR HYBRID CARD (RIGHT ABOVE DASHBOARD) */}
+      {/* 2. SYNCHRONIZED ANALYTICS DASHBOARD WIDGETS */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Predicted JAMB Score</p>
+          <div className="flex items-baseline gap-1 mt-1">
+            <h3 className="text-2xl sm:text-3xl font-extrabold text-emerald-600">
+              {predictedJambScore}
+            </h3>
+            <span className="text-xs text-slate-400 font-bold">/ 400</span>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Mock Tests</p>
+          <h3 className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-1">
+            {totalMockTests}
+          </h3>
+        </div>
+
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Questions Solved</p>
+          <h3 className="text-2xl sm:text-3xl font-extrabold text-blue-600 mt-1">
+            {totalQuestionsSolved}
+          </h3>
+        </div>
+
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Overall Accuracy</p>
+          <h3 className="text-2xl sm:text-3xl font-extrabold text-amber-500 mt-1">
+            {overallAccuracy}%
+          </h3>
+        </div>
+      </div>
+
+      {/* 3. SUBJECT PERFORMANCE ACCURACY BREAKDOWN */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+        <div className="flex justify-between items-center mb-4">
+          <h4 className="font-bold text-slate-800 text-sm">Subject Accuracy Breakdown</h4>
+          <button
+            onClick={onOpenHistory}
+            className="text-xs font-semibold text-blue-600 hover:text-blue-700"
+          >
+            View Full Exam History →
+          </button>
+        </div>
+
+        {Object.keys(subjectBreakdown).length === 0 ? (
+          <p className="text-xs text-slate-500 italic py-2">
+            No practice history available yet. Complete a test session to view your real-time subject accuracy breakdown.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {Object.entries(subjectBreakdown).map(([subject, data]) => {
+              const accuracy = data.total > 0 ? Math.round((data.score / data.total) * 100) : 0;
+              return (
+                <div key={subject} className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1">
+                  <div className="flex justify-between text-xs font-semibold text-slate-700">
+                    <span className="uppercase tracking-wider">{subject}</span>
+                    <span>{accuracy}% ({data.score}/{data.total})</span>
+                  </div>
+                  <div className="w-full bg-slate-200 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all ${
+                        accuracy >= 70 ? 'bg-emerald-500' : accuracy >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${accuracy}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* 4. SBEDTECH AI EXPERT TUTOR HYBRID CARD */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 rounded-3xl p-6 sm:p-7 text-white shadow-xl border border-indigo-800/40 relative overflow-hidden">
         {/* Background Accent Glow */}
         <div className="absolute -top-12 -right-12 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -478,7 +563,7 @@ export default function HomeScreen({
         </div>
       </div>
 
-      {/* 3. EMBEDDED INLINE DASHBOARD */}
+      {/* 5. EMBEDDED INLINE DASHBOARD */}
       <DashboardView
         userProfile={userProfile}
         history={history}
