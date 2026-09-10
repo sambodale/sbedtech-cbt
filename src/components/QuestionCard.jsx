@@ -50,7 +50,7 @@ export default function QuestionCard({
 
   return (
     <div className="w-full max-w-[1350px] mx-auto px-2 sm:px-4 py-2">
-      {/* Universal layout container for ALL subjects */}
+      {/* Universal layout container forcing side-by-side on desktop */}
       <div className="w-full flex flex-col lg:flex-row items-start gap-6">
         
         {/* LEFT COLUMN: Main Question Area (~72%) */}
