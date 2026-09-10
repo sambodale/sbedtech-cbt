@@ -390,7 +390,8 @@ export default function App() {
         onOpenAuth={() => setShowSignUp(true)}
       />
 
-      <main className="container mx-auto px-4 py-6">
+      {/* UPDATED WRAPPER: Changed container to w-full max-w-7xl mx-auto */}
+      <main className="w-full max-w-7xl mx-auto px-4 py-6">
         {loadingQuestions ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
             <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
