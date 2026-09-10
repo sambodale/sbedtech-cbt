@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 
 export default function QuestionCard({
-  subject = 'Government',
-  mode = 'practice',
+  subject = 'ECONOMICS',
+  mode = 'PRACTICE',
   questions = [],
   initialTimeInSeconds = 5400,
   onEndExam,
@@ -12,11 +12,9 @@ export default function QuestionCard({
   const [flaggedQuestions, setFlaggedQuestions] = useState({});
   const [timeLeft, setTimeLeft] = useState(initialTimeInSeconds);
 
-  // Fallback array size to ensure 1-to-N matrix always renders even if questions array is loading
   const totalQuestions = questions.length > 0 ? questions.length : 40;
   const currentQ = questions[currentIndex] || {};
 
-  // Countdown timer
   useEffect(() => {
     if (timeLeft <= 0) {
       handleSubmit();
@@ -50,48 +48,41 @@ export default function QuestionCard({
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 font-sans">
+    <div className="w-full max-w-7xl mx-auto p-4 font-sans">
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
         
-        {/* LEFT / CENTER PANEL: QUESTION DISPLAY & NAV */}
-        <div className="lg:col-span-3 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between min-h-[500px]">
+        {/* MAIN QUESTION DISPLAY (3 COLUMNS ON DESKTOP) */}
+        <div className="lg:col-span-3 bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
           <div>
-            {/* Header info bar */}
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
               <div>
-                <span className="px-2.5 py-1 bg-blue-100 text-blue-700 font-extrabold text-[10px] rounded-full uppercase">
+                <span className="px-3 py-1 bg-blue-100 text-blue-700 font-extrabold text-[10px] rounded-full uppercase tracking-wider">
                   {subject} ({mode})
                 </span>
-                <p className="text-xs font-bold text-slate-500 mt-1">
+                <p className="text-xs font-bold text-slate-500 mt-2">
                   Question {currentIndex + 1} of {totalQuestions}
                 </p>
               </div>
 
-              <div className="flex items-center gap-3">
-                <span className="px-3 py-1.5 bg-slate-900 text-amber-400 font-black text-xs rounded-xl flex items-center gap-1">
-                  ⏱️ {Math.floor(timeLeft / 60)}m {timeLeft % 60}s
-                </span>
-                <button
-                  onClick={handleSubmit}
-                  className="text-xs font-bold text-red-600 hover:text-red-700 transition"
-                >
-                  Quit Exam
-                </button>
-              </div>
+              <button
+                onClick={handleSubmit}
+                className="text-xs font-extrabold text-red-600 hover:text-red-700 transition"
+              >
+                Quit Exam
+              </button>
             </div>
 
-            {/* Question Text */}
             <h3 className="text-base sm:text-lg font-extrabold text-slate-800 mb-6 leading-relaxed">
-              {currentQ.question || 'ECOWAS Treaty was signed on'}
+              {currentQ.question || "Price elasticity of demand is expressed as"}
             </h3>
 
-            {/* Options List */}
+            {/* OPTIONS LIST */}
             <div className="space-y-3">
               {['A', 'B', 'C', 'D'].map((key) => {
                 const defaultOptions = {
-                  A: '28-May-74',
-                  B: '1-Oct-60',
-                  C: '12-Jun-75',
+                  A: '% change in quantity demanded / % change in price',
+                  B: '% change in quantity demanded / % change in income',
+                  C: '% change in income / % change in quantity demanded',
                   D: 'none of the above',
                 };
                 const optionText = currentQ.options ? currentQ.options[key] : defaultOptions[key];
@@ -102,32 +93,32 @@ export default function QuestionCard({
                     key={key}
                     type="button"
                     onClick={() => handleSelectOption(key)}
-                    className={`w-full p-4 rounded-2xl border text-left text-xs sm:text-sm font-semibold transition flex items-center gap-3 ${
+                    className={`w-full p-4 rounded-2xl border text-left text-xs sm:text-sm font-semibold transition flex items-center gap-4 ${
                       isSelected
-                        ? 'bg-blue-50 border-blue-600 text-blue-900 ring-2 ring-blue-500/20'
-                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
+                        ? 'bg-blue-50 border-blue-600 text-blue-900 ring-2 ring-blue-500/20 shadow-sm'
+                        : 'bg-slate-50/50 border-slate-200 text-slate-700 hover:bg-slate-100/80 hover:border-slate-300'
                     }`}
                   >
                     <span
-                      className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs uppercase ${
-                        isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+                      className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs uppercase flex-shrink-0 ${
+                        isSelected ? 'bg-blue-600 text-white' : 'bg-white border border-slate-300 text-slate-600'
                       }`}
                     >
                       {key}
                     </span>
-                    <span>{optionText}</span>
+                    <span className="leading-snug">{optionText}</span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* BOTTOM NAVIGATION ACTION BAR */}
+          {/* ACTION BUTTONS */}
           <div className="pt-6 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 mt-8">
             <button
               type="button"
               onClick={handleToggleFlag}
-              className={`px-4 py-2.5 text-xs font-bold rounded-xl transition border flex items-center gap-1.5 ${
+              className={`px-4 py-2.5 text-xs font-bold rounded-xl transition border flex items-center gap-2 ${
                 flaggedQuestions[currentIndex]
                   ? 'bg-amber-100 border-amber-300 text-amber-800'
                   : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'
@@ -137,22 +128,20 @@ export default function QuestionCard({
             </button>
 
             <div className="flex items-center gap-3">
-              {/* Previous Button */}
               <button
                 type="button"
                 disabled={currentIndex === 0}
                 onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
-                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-slate-100"
+                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-slate-100"
               >
                 ← Previous
               </button>
 
-              {/* Next Button */}
               <button
                 type="button"
                 disabled={currentIndex === totalQuestions - 1}
                 onClick={() => setCurrentIndex((prev) => Math.min(totalQuestions - 1, prev + 1))}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-md shadow-blue-600/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shadow-md shadow-blue-600/20 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Next →
               </button>
@@ -160,18 +149,17 @@ export default function QuestionCard({
           </div>
         </div>
 
-        {/* RIGHT SIDEBAR: 1-TO-N QUESTION MATRIX */}
+        {/* 1-TO-N QUESTION MATRIX SIDEBAR (1 COLUMN ON DESKTOP) */}
         <div className="lg:col-span-1 bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
               Question Matrix
             </h4>
             <span className="text-[11px] font-bold text-emerald-600">
-              {Object.keys(userAnswers).length}/{totalQuestions} Answered
+              {Object.keys(userAnswers).length}/{totalQuestions}
             </span>
           </div>
 
-          {/* 1-to-N Grid Matrix */}
           <div className="grid grid-cols-5 gap-2 max-h-80 overflow-y-auto pr-1">
             {Array.from({ length: totalQuestions }, (_, idx) => {
               const qNum = idx + 1;
@@ -202,9 +190,9 @@ export default function QuestionCard({
           <button
             type="button"
             onClick={handleSubmit}
-            className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-2xl shadow-lg shadow-emerald-600/20 transition mt-4"
+            className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-2xl shadow-lg shadow-emerald-600/20 transition mt-4 cursor-pointer"
           >
-            Submit Exam
+            Submit Exam Session
           </button>
         </div>
 
