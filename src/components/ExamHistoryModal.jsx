@@ -1,13 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
-export default function ExamHistoryModal({ onClose }) {
-  const [history, setHistory] = useState([]);
+export default function ExamHistoryModal({ history = [], onClose }) {
   const [selectedAttempt, setSelectedAttempt] = useState(null);
 
-  useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem('sbedtech_exam_history') || '[]');
-    setHistory(saved);
-  }, []);
+  const formatDate = (isoString) => {
+    if (!isoString) return 'Unknown date';
+    try {
+      return new Date(isoString).toLocaleDateString('en-US', {
+        year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      });
+    } catch {
+      return isoString;
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -32,27 +37,44 @@ export default function ExamHistoryModal({ onClose }) {
             >
               ← Back to History List
             </button>
-            {selectedAttempt.summary.map((item, idx) => (
-              <div
-                key={idx}
-                className={`p-4 rounded-xl border text-sm ${
-                  item.isCorrect ? 'border-green-200 bg-green-50/20' : 'border-red-200 bg-red-50/20'
-                }`}
-              >
-                <div className="flex justify-between font-bold mb-1">
-                  <span>Q{idx + 1}. {item.question}</span>
-                  <span className={item.isCorrect ? 'text-green-600' : 'text-red-500'}>
-                    {item.isCorrect ? 'Correct' : 'Missed'}
-                  </span>
+
+            {Array.isArray(selectedAttempt.summary) && selectedAttempt.summary.length > 0 ? (
+              selectedAttempt.summary.map((item, idx) => (
+                <div
+                  key={idx}
+                  className={`p-4 rounded-xl border text-sm ${
+                    item.isCorrect ? 'border-green-200 bg-green-50/20' : 'border-red-200 bg-red-50/20'
+                  }`}
+                >
+                  <div className="flex justify-between font-bold mb-1">
+                    <span>Q{idx + 1}. {item.question}</span>
+                    <span className={item.isCorrect ? 'text-green-600' : 'text-red-500'}>
+                      {item.isCorrect ? 'Correct' : 'Missed'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    Your Answer: <strong className="uppercase">{item.userAnswer || 'None'}</strong> | Correct: <strong className="uppercase">{item.correctAnswer}</strong>
+                  </p>
+                  <div className="mt-2 p-2 bg-white rounded border border-slate-200 text-xs text-slate-600">
+                    <strong>Explanation:</strong> {item.explanation}
+                  </div>
                 </div>
-                <p className="text-xs text-slate-600">
-                  Your Answer: <strong className="uppercase">{item.userAnswer || 'None'}</strong> | Correct: <strong className="uppercase">{item.correctAnswer}</strong>
+              ))
+            ) : (
+              <div className="space-y-3">
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-600">
+                  <p className="font-semibold text-slate-800 mb-1">
+                    Score: {selectedAttempt.score}/{selectedAttempt.totalQuestions} ({selectedAttempt.percentage}%)
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Taken on {formatDate(selectedAttempt.timestamp)}
+                  </p>
+                </div>
+                <p className="text-center py-4 text-slate-400 text-xs">
+                  Detailed question-by-question breakdown isn't available for this attempt.
                 </p>
-                <div className="mt-2 p-2 bg-white rounded border border-slate-200 text-xs text-slate-600">
-                  <strong>Explanation:</strong> {item.explanation}
-                </div>
               </div>
-            ))}
+            )}
           </div>
         ) : history.length > 0 ? (
           <div className="overflow-y-auto space-y-3 pr-1">
@@ -64,10 +86,10 @@ export default function ExamHistoryModal({ onClose }) {
               >
                 <div>
                   <h3 className="font-bold text-slate-800">{item.subject}</h3>
-                  <p className="text-xs text-slate-500">{item.date}</p>
+                  <p className="text-xs text-slate-500">{formatDate(item.timestamp)}</p>
                 </div>
                 <div className="text-right">
-                  <span className="text-lg font-bold text-blue-600">{item.score}/{item.total}</span>
+                  <span className="text-lg font-bold text-blue-600">{item.score}/{item.totalQuestions}</span>
                   <p className="text-xs text-slate-500">({item.percentage}%)</p>
                 </div>
               </div>
