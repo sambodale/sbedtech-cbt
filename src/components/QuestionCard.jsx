@@ -49,14 +49,14 @@ export default function QuestionCard({
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 py-2">
-      {/* Container forcing flex layout on desktop screens */}
+    <div className="w-full max-w-[1350px] mx-auto px-2 sm:px-4 py-2">
+      {/* Universal layout container for ALL subjects */}
       <div className="w-full flex flex-col lg:flex-row items-start gap-6">
         
-        {/* LEFT COLUMN: Main Question Area (~72% width) */}
+        {/* LEFT COLUMN: Main Question Area (~72%) */}
         <div 
-          className="w-full lg:w-[72%] bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between shrink-0"
-          style={{ minWidth: 0 }}
+          className="w-full lg:w-[72%] bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between"
+          style={{ minWidth: 0, flexShrink: 0 }}
         >
           <div>
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
@@ -151,10 +151,10 @@ export default function QuestionCard({
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Matrix Sidebar (~28% width) */}
+        {/* RIGHT COLUMN: Question Matrix Sidebar (~28%) */}
         <div 
-          className="w-full lg:w-[28%] bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4 shrink-0"
-          style={{ minWidth: 0 }}
+          className="w-full lg:w-[28%] bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4"
+          style={{ minWidth: 0, flexShrink: 0 }}
         >
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
