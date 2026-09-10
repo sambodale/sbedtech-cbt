@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 export default function QuestionCard({
-  subject = 'ECONOMICS',
+  subject = '',
   mode = 'PRACTICE',
   questions = [],
   initialTimeInSeconds = 5400,
@@ -12,6 +12,8 @@ export default function QuestionCard({
   const [flaggedQuestions, setFlaggedQuestions] = useState({});
   const [timeLeft, setTimeLeft] = useState(initialTimeInSeconds);
 
+  // Dynamic Subject display (Fallback to question subject or CBT EXAM)
+  const displaySubject = subject || questions[0]?.subject || 'CBT EXAM';
   const totalQuestions = questions.length > 0 ? questions.length : 40;
   const currentQ = questions[currentIndex] || {};
 
@@ -38,7 +40,7 @@ export default function QuestionCard({
   const handleSubmit = () => {
     if (onEndExam) {
       onEndExam({
-        subject,
+        subject: displaySubject,
         mode,
         score: 0,
         totalQuestions,
@@ -48,16 +50,16 @@ export default function QuestionCard({
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-4 font-sans">
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+    <div className="w-full max-w-[1400px] mx-auto font-sans">
+      <div className="w-full flex flex-col lg:flex-row items-start gap-6">
         
-        {/* MAIN QUESTION DISPLAY (3 COLUMNS ON DESKTOP) */}
-        <div className="lg:col-span-3 bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
+        {/* MAIN QUESTION DISPLAY */}
+        <div className="w-full lg:w-[73%] bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between shrink-0">
           <div>
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
               <div>
                 <span className="px-3 py-1 bg-blue-100 text-blue-700 font-extrabold text-[10px] rounded-full uppercase tracking-wider">
-                  {subject} ({mode})
+                  {displaySubject} ({mode})
                 </span>
                 <p className="text-xs font-bold text-slate-500 mt-2">
                   Question {currentIndex + 1} of {totalQuestions}
@@ -65,28 +67,25 @@ export default function QuestionCard({
               </div>
 
               <button
+                type="button"
                 onClick={handleSubmit}
-                className="text-xs font-extrabold text-red-600 hover:text-red-700 transition"
+                className="text-xs font-extrabold text-red-600 hover:text-red-700 transition cursor-pointer"
               >
                 Quit Exam
               </button>
             </div>
 
             <h3 className="text-base sm:text-lg font-extrabold text-slate-800 mb-6 leading-relaxed">
-              {currentQ.question || "Price elasticity of demand is expressed as"}
+              {currentQ.question || "Question unavailable"}
             </h3>
 
             {/* OPTIONS LIST */}
             <div className="space-y-3">
               {['A', 'B', 'C', 'D'].map((key) => {
-                const defaultOptions = {
-                  A: '% change in quantity demanded / % change in price',
-                  B: '% change in quantity demanded / % change in income',
-                  C: '% change in income / % change in quantity demanded',
-                  D: 'none of the above',
-                };
-                const optionText = currentQ.options ? currentQ.options[key] : defaultOptions[key];
+                const optionText = currentQ.options ? currentQ.options[key] || currentQ.options[key.toLowerCase()] : '';
                 const isSelected = userAnswers[currentIndex] === key;
+
+                if (!optionText) return null;
 
                 return (
                   <button
@@ -118,7 +117,7 @@ export default function QuestionCard({
             <button
               type="button"
               onClick={handleToggleFlag}
-              className={`px-4 py-2.5 text-xs font-bold rounded-xl transition border flex items-center gap-2 ${
+              className={`px-4 py-2.5 text-xs font-bold rounded-xl transition border flex items-center gap-2 cursor-pointer ${
                 flaggedQuestions[currentIndex]
                   ? 'bg-amber-100 border-amber-300 text-amber-800'
                   : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'
@@ -149,8 +148,8 @@ export default function QuestionCard({
           </div>
         </div>
 
-        {/* 1-TO-N QUESTION MATRIX SIDEBAR (1 COLUMN ON DESKTOP) */}
-        <div className="lg:col-span-1 bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+        {/* 1-TO-N QUESTION MATRIX SIDEBAR */}
+        <div className="w-full lg:w-[27%] bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4 shrink-0">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
               Question Matrix
@@ -176,7 +175,7 @@ export default function QuestionCard({
                   key={idx}
                   type="button"
                   onClick={() => setCurrentIndex(idx)}
-                  className={`relative h-9 text-xs rounded-xl transition border flex items-center justify-center ${btnStyle} ${
+                  className={`relative h-9 text-xs rounded-xl transition border flex items-center justify-center cursor-pointer ${btnStyle} ${
                     isFlagged ? 'ring-2 ring-amber-500 border-amber-500' : ''
                   }`}
                 >

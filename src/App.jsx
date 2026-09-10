@@ -40,12 +40,12 @@ export default function App() {
   // Local fallback states
   const [localUserProfile, setLocalUserProfile] = useState(null);
   const [localActivated, setLocalActivated] = useState(false);
-  
+
   // Modals
   const [showSignUp, setShowSignUp] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showAiTutorModal, setShowAiTutorModal] = useState(false);
-  
+
   // Exam state
   const [pendingAction, setPendingAction] = useState(null);
   const [activeSubject, setActiveSubject] = useState('');
@@ -82,7 +82,7 @@ export default function App() {
   }, []);
 
   // Combined Active Profile
-  const activeUserProfile = currentUser 
+  const activeUserProfile = currentUser
     ? { email: currentUser.email, ...firebaseProfile }
     : localUserProfile;
 
@@ -183,7 +183,7 @@ export default function App() {
     const rawSubject = (subject || '').toLowerCase().trim();
     const cleanSubject = subjectMap[rawSubject] || rawSubject;
 
-    setActiveSubject(subject);
+    setActiveSubject(subject || 'CBT EXAM');
     setExamMode(mode || 'practice');
 
     try {
@@ -236,10 +236,10 @@ export default function App() {
 
           if (typeof options === 'object' && !Array.isArray(options)) {
             options = {
-              a: options.a || q.optionA || q.a || '',
-              b: options.b || q.optionB || q.b || '',
-              c: options.c || q.optionC || q.c || '',
-              d: options.d || q.optionD || q.d || '',
+              A: options.A || options.a || q.optionA || q.a || '',
+              B: options.B || options.b || q.optionB || q.b || '',
+              C: options.C || options.c || q.optionC || q.c || '',
+              D: options.D || options.d || q.optionD || q.d || '',
             };
           }
 
@@ -356,7 +356,7 @@ export default function App() {
     if (activeUserProfile?.fullName) return activeUserProfile.fullName;
     if (activeUserProfile?.username) return activeUserProfile.username;
     if (activeUserProfile?.name) return activeUserProfile.name;
-    
+
     const fullName = `${activeUserProfile?.firstName || ''} ${activeUserProfile?.lastName || ''}`.trim();
     if (fullName) return fullName;
 
@@ -390,8 +390,7 @@ export default function App() {
         onOpenAuth={() => setShowSignUp(true)}
       />
 
-      {/* UPDATED WRAPPER: Changed container to w-full max-w-7xl mx-auto */}
-      <main className="w-full max-w-7xl mx-auto px-4 py-6">
+      <main className="w-full max-w-[1400px] mx-auto px-4 py-6">
         {loadingQuestions ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
             <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -423,7 +422,7 @@ export default function App() {
               subject={activeSubject}
               mode={examMode}
               questions={questions}
-              timeLeft={timeLeft}
+              initialTimeInSeconds={timeLeft}
               onEndExam={handleEndExam}
             />
           </Suspense>
