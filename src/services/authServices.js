@@ -13,7 +13,7 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 
-// Initialize Firebase services (ensure your firebase app config is imported/initialized)
+// Initialize Firebase services
 const auth = getAuth();
 const db = getFirestore();
 
@@ -35,13 +35,12 @@ export const getUserProfile = async (uid) => {
         uid,
         fullName: data.fullName || 'Candidate',
         email: data.email || '',
-        role: data.role || 'student', // Default to 'student' if role field is missing
+        role: data.role || 'student',
         isActivated: Boolean(data.isActivated),
         createdAt: data.createdAt || null,
         ...data,
       };
     } else {
-      // Fallback if auth user exists but Firestore profile record is not yet created
       return {
         uid,
         fullName: 'Candidate',
@@ -58,9 +57,6 @@ export const getUserProfile = async (uid) => {
 
 /**
  * Signs in a user with email & password and retrieves their profile with role.
- * @param {string} email 
- * @param {string} password 
- * @returns {Promise<Object>} Object containing user credentials and profile data.
  */
 export const loginUser = async (email, password) => {
   try {
@@ -79,12 +75,6 @@ export const loginUser = async (email, password) => {
 
 /**
  * Registers a new user and sets initial profile role in Firestore.
- * @param {Object} params
- * @param {string} params.email
- * @param {string} params.password
- * @param {string} params.fullName
- * @param {string} [params.role='student'] Optional role parameter ('student' | 'admin')
- * @returns {Promise<Object>}
  */
 export const registerUser = async ({ email, password, fullName, role = 'student' }) => {
   try {
@@ -93,14 +83,13 @@ export const registerUser = async ({ email, password, fullName, role = 'student'
 
     const profileData = {
       uid,
-      fullName,
+      fullName: fullName || email.split('@')[0],
       email,
-      role, // Ensures role is stored during account creation
+      role,
       isActivated: false,
       createdAt: serverTimestamp(),
     };
 
-    // Store in Firestore
     await setDoc(doc(db, 'users', uid), profileData);
 
     return {
@@ -127,8 +116,6 @@ export const logoutUser = async () => {
 
 /**
  * Listens to Auth state changes and returns both the Firebase user and their role-enriched profile.
- * @param {Function} callback Callback receiving (user, profile)
- * @returns {Unsubscribe} Firebase unsubscribe function
  */
 export const subscribeToAuthChanges = (callback) => {
   return onAuthStateChanged(auth, async (user) => {
@@ -144,4 +131,20 @@ export const subscribeToAuthChanges = (callback) => {
       callback(null, null);
     }
   });
+};
+
+// ==========================================
+// COMPONENT ALIAS WRAPPERS (Fixes Build Errors)
+// ==========================================
+
+export const registerCandidate = async (email, password) => {
+  return await registerUser({ email, password, fullName: email.split('@')[0] });
+};
+
+export const loginCandidate = async (email, password) => {
+  return await loginUser(email, password);
+};
+
+export const logoutCandidate = async () => {
+  return await logoutUser();
 };
