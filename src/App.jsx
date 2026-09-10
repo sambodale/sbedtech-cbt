@@ -4,6 +4,7 @@ import HomeScreen from './components/HomeScreen';
 import SignUpModal from './components/SignUpModal';
 import ExamHistoryModal from './components/ExamHistoryModal';
 import AiTutorModal from './components/AiTutorModal';
+import AdminDashboard from './components/AdminDashboard';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase/config';
 import { getUserProfile } from './services/authServices';
@@ -41,10 +42,11 @@ export default function App() {
   const [localUserProfile, setLocalUserProfile] = useState(null);
   const [localActivated, setLocalActivated] = useState(false);
 
-  // Modals
+  // Modals & Views
   const [showSignUp, setShowSignUp] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showAiTutorModal, setShowAiTutorModal] = useState(false);
+  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
 
   // Exam state
   const [pendingAction, setPendingAction] = useState(null);
@@ -218,9 +220,7 @@ export default function App() {
         });
       }
 
-      // AI Expert Tutor Fallback: Generate JAMB UTME questions if database returned no results
       if (fetchedQuestions.length === 0) {
-        console.log(`No database questions found for ${cleanSubject} under "${topic || 'General Syllabus'}". Generating via AI Tutor...`);
         fetchedQuestions = await generateTopicQuestions({
           subject: cleanSubject,
           topic: topic || 'General JAMB Syllabus',
@@ -278,7 +278,6 @@ export default function App() {
       setShowSignUp(true);
       return;
     }
-
     fetchExamQuestions(params);
   };
 
@@ -320,11 +319,13 @@ export default function App() {
     if (summaryData) {
       const newRecord = {
         id: Date.now(),
-        date: new Date().toISOString(),
+        date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         subject: activeSubject,
         mode: examMode,
         score: summaryData.score || 0,
         totalQuestions: summaryData.totalQuestions || questions.length || 40,
+        timeSpentSeconds: summaryData.timeSpentSeconds || 0,
+        itemizedResults: summaryData.itemizedResults || []
       };
 
       if (currentUser?.uid) {
@@ -333,7 +334,7 @@ export default function App() {
             subject: activeSubject,
             score: newRecord.score,
             totalQuestions: newRecord.totalQuestions,
-            timeSpentSeconds: summaryData.timeSpentSeconds || 0,
+            timeSpentSeconds: newRecord.timeSpentSeconds,
             userAnswers: summaryData.userAnswers || {}
           });
         } catch (err) {
@@ -373,6 +374,24 @@ export default function App() {
     return `${sub} (${mode})`;
   };
 
+  // Compute stats for Admin Dashboard
+  const totalMockTests = examHistory.length;
+  const totalQuestionsSolved = examHistory.reduce((acc, curr) => acc + (curr.totalQuestions || 40), 0);
+  const totalScoreSum = examHistory.reduce((acc, curr) => acc + (curr.score || 0), 0);
+  const maxPossibleScoreSum = totalMockTests * 40;
+  const overallAccuracy = maxPossibleScoreSum > 0 ? Math.round((totalScoreSum / maxPossibleScoreSum) * 100) : 0;
+  
+  const adminStats = {
+    totalMockTests,
+    totalQuestionsSolved,
+    overallAccuracy,
+    predictedJambScore: Math.min(400, Math.round(120 + (overallAccuracy * 2.8))),
+    subjectBreakdown: examHistory.reduce((acc, curr) => {
+      acc[curr.subject] = (acc[curr.subject] || 0) + 1;
+      return acc;
+    }, {})
+  };
+
   if (loadingAuth) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center">
@@ -390,9 +409,26 @@ export default function App() {
         onOpenAuth={() => setShowSignUp(true)}
       />
 
-      {/* Main Container updated with flexible width bounds */}
+      {/* Admin Toggle Banner (Visible for convenience or admin accounts) */}
+      <div className="bg-slate-900 text-white px-4 py-2 flex justify-between items-center text-xs">
+        <span className="font-medium text-slate-300">SBEdTech CBT System Environment</span>
+        <button
+          onClick={() => setShowAdminDashboard(!showAdminDashboard)}
+          className="bg-purple-600 hover:bg-purple-700 px-3 py-1 rounded-xl font-bold transition text-white shadow-sm"
+        >
+          {showAdminDashboard ? 'Switch to CBT Student View' : '⚙️ Open Backend Admin Dashboard'}
+        </button>
+      </div>
+
+      {/* Main Container */}
       <main className="w-full px-2 sm:px-6 lg:px-8 py-6">
-        {loadingQuestions ? (
+        {showAdminDashboard ? (
+          <AdminDashboard
+            history={examHistory}
+            stats={adminStats}
+            onReturnHome={() => setShowAdminDashboard(false)}
+          />
+        ) : loadingQuestions ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
             <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             <p className="text-slate-600 font-semibold text-sm">
