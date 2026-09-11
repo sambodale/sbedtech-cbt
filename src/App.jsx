@@ -4,6 +4,7 @@ import HomeScreen from './components/HomeScreen';
 import SignUpModal from './components/SignUpModal';
 import ExamHistoryModal from './components/ExamHistoryModal';
 import AiTutorModal from './components/AiTutorModal';
+import AdminDashboard from './components/AdminDashboard'; // <-- 1. Imported AdminDashboard
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase/config';
 import { getUserProfile } from './services/authServices';
@@ -35,6 +36,7 @@ export const JAMB_ENGLISH_NOVELS = {
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [firebaseProfile, setFirebaseProfile] = useState(null);
+  const [userRole, setUserRole] = useState(null); // <-- 2. Added userRole state
   const [loadingAuth, setLoadingAuth] = useState(true);
 
   // Local fallback states
@@ -61,7 +63,7 @@ export default function App() {
   const [timeLeft, setTimeLeft] = useState(null);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
 
-  // Auth Listener
+  // Auth Listener (Updated to extract and track user role)
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
@@ -69,11 +71,20 @@ export default function App() {
         try {
           const profileData = await getUserProfile(user.uid);
           setFirebaseProfile(profileData);
+          
+          // Check and store user role if present in Firestore
+          if (profileData && profileData.role) {
+            setUserRole(profileData.role);
+          } else {
+            setUserRole('student');
+          }
         } catch (error) {
           console.error("Error loading user profile:", error);
+          setUserRole('student');
         }
       } else {
         setFirebaseProfile(null);
+        setUserRole(null);
       }
       setLoadingAuth(false);
     });
@@ -353,6 +364,7 @@ export default function App() {
   };
 
   const getCandidateName = () => {
+    if (userRole === 'admin') return `${getCandidateNameFromProfile()} (Admin)`;
     if (activeUserProfile?.fullName) return activeUserProfile.fullName;
     if (activeUserProfile?.username) return activeUserProfile.username;
     if (activeUserProfile?.name) return activeUserProfile.name;
@@ -366,7 +378,12 @@ export default function App() {
     return 'Guest User';
   };
 
+  const getCandidateNameFromProfile = () => {
+    return activeUserProfile?.fullName || currentUser?.email?.split('@')[0] || 'Admin';
+  };
+
   const getExamTypeLabel = () => {
+    if (userRole === 'admin') return 'ADMIN PORTAL';
     if (!examStarted) return 'JAMB CBT PORTAL';
     const sub = activeSubject ? activeSubject.toUpperCase() : 'CBT EXAM';
     const mode = examMode ? examMode.toUpperCase() : 'PRACTICE';
@@ -398,6 +415,9 @@ export default function App() {
               Fetching questions and aligning with selected JAMB topic...
             </p>
           </div>
+        ) : userRole === 'admin' ? (
+          // 3. Render Admin Dashboard if user role is admin
+          <AdminDashboard />
         ) : !examStarted ? (
           <HomeScreen
             userProfile={activeUserProfile}
