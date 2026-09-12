@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import QuestionPalette from './QuestionPalette';
 
-export default function QuestionCard({ subject, mode, questions, onEndExam }) {
+export default function QuestionCard({ subject, mode, questions, onEndExam, onSubmitRef }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState({});
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -36,6 +36,8 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
   };
 
   const handleSubmitExam = () => {
+    if (isSubmitted) return; // Prevent duplicate submissions
+
     let score = 0;
     const detailedSummary = questions.map((q, idx) => {
       const userAns = (selectedAnswers[idx] || '').toLowerCase().trim();
@@ -73,7 +75,19 @@ export default function QuestionCard({ subject, mode, questions, onEndExam }) {
 
     setExamResult(resultData);
     setIsSubmitted(true);
+
+    // Pass result summary back up to App.jsx if needed for tracking
+    if (onEndExam) {
+      onEndExam(resultData);
+    }
   };
+
+  // Bind this internal submit handler to App.jsx's ref for timer auto-submit
+  useEffect(() => {
+    if (onSubmitRef) {
+      onSubmitRef.current = handleSubmitExam;
+    }
+  }, [selectedAnswers, isSubmitted, questions]);
 
   // --- 1. RESULT SUMMARY SCREEN ---
   if (isSubmitted && !showReview) {

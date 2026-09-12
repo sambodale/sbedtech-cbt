@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import Header from './components/Header';
 import HomeScreen from './components/HomeScreen';
 import SignUpModal from './components/SignUpModal';
@@ -57,13 +57,16 @@ export default function App() {
   const [questions, setQuestions] = useState([]);
   const [examStarted, setExamStarted] = useState(false);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
-
+  
   // History tracking
   const [examHistory, setExamHistory] = useState([]);
 
   // Timer state
   const [timeLeft, setTimeLeft] = useState(null);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
+
+  // Ref for auto-submitting when timer hits zero
+  const submitExamRef = useRef(null);
 
   // Auth Listener
   useEffect(() => {
@@ -119,14 +122,19 @@ export default function App() {
     loadUserData();
   }, [currentUser]);
 
-  // Timer Countdown Effect
+  // Timer Countdown Effect with Real Auto-Submit Integration
   useEffect(() => {
     if (!isTimerRunning || timeLeft === null) return;
 
     if (timeLeft <= 0) {
       setIsTimerRunning(false);
-      alert('Time is up! Submitting your exam...');
-      handleEndExam();
+      
+      // Instantly invoke QuestionCard's submit handler to grade active answers
+      if (submitExamRef.current) {
+        submitExamRef.current();
+      } else {
+        handleEndExam({ score: 0, totalQuestions: questions.length || 40, timeSpentSeconds: 0 });
+      }
       return;
     }
 
@@ -135,8 +143,8 @@ export default function App() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isTimerRunning, timeLeft]);
-
+  }, [isTimerRunning, timeLeft, questions]);
+   
   const handleSaveProfile = (profileData) => {
     setLocalUserProfile(profileData);
     localStorage.setItem('sbedtech_user', JSON.stringify(profileData));
@@ -174,7 +182,7 @@ export default function App() {
       'geography': 'geography',
       'financial accounting': 'accounting',
       'commerce': 'commerce',
-     'literature in english': 'literature-in-english',
+      'literature in english': 'literature-in-english',
       'literature': 'literature-in-english',
       'islamic religious studies (irs)': 'irs',
       'irs': 'irs',
@@ -223,9 +231,9 @@ export default function App() {
         });
       }
 
-      // AI Expert Tutor Fallback: Generate JAMB UTME questions if database returned no results
+      // AI Expert Tutor Fallback
       if (fetchedQuestions.length === 0) {
-        console.log(`No database questions found for ${cleanSubject} under "${topic || 'General Syllabus'}". Generating via AI Tutor...`);
+        console.log(`No database questions found for ${cleanSubject}. Generating via AI Tutor...`);
         fetchedQuestions = await generateTopicQuestions({
           subject: cleanSubject,
           topic: topic || 'General JAMB Syllabus',
@@ -434,6 +442,7 @@ export default function App() {
               mode={examMode}
               questions={questions}
               timeLeft={timeLeft}
+              onSubmitRef={submitExamRef}
               onEndExam={handleEndExam}
             />
           </Suspense>
