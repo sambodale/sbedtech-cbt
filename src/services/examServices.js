@@ -1,57 +1,57 @@
 import { db } from '../firebase/config';
-import { collection, addDoc, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where, Timestamp } from 'firebase/firestore';
 
-/**
- * Saves a completed exam result to the 'exam_results' collection in Firestore.
- * @param {string} userId - The unique UID of the candidate.
- * @param {Object} examData - Exam details (subject, score, totalQuestions, timeSpentSeconds, userAnswers).
- */
-export const saveExamResult = async (userId, examData) => {
+export async function saveExamResult(userId, resultData) {
   try {
-    const docRef = await addDoc(collection(db, 'exam_results'), {
+    await addDoc(collection(db, 'exam_results'), {
       userId,
-      subject: examData.subject || '',
-      score: examData.score || 0,
-      totalQuestions: examData.totalQuestions || 40,
-      percentage: Math.round(((examData.score || 0) / (examData.totalQuestions || 40)) * 100),
-      timeSpentSeconds: examData.timeSpentSeconds || 0,
-      userAnswers: examData.userAnswers || {},
-      timestamp: new Date().toISOString()
+      subject: resultData.subject,
+      score: resultData.score,
+      totalQuestions: resultData.totalQuestions,
+      timeSpentSeconds: resultData.timeSpentSeconds || 0,
+      userAnswers: resultData.userAnswers || {},
+      date: Timestamp.now()
     });
-    return docRef.id;
   } catch (error) {
-    console.error("Error saving exam result to Firestore:", error);
+    console.error("Error saving exam result:", error);
     throw error;
   }
-};
+}
 
-/**
- * Fetches all past exam history for a specific student from Firestore.
- * @param {string} userId - The candidate's Firebase user ID.
- * @returns {Array} List of past exam attempt records.
- */
-export const getUserExamHistory = async (userId) => {
+export async function getUserExamHistory(userId) {
   try {
-    const examRef = collection(db, 'exam_results');
     const q = query(
-      examRef, 
+      collection(db, 'exam_results'),
       where('userId', '==', userId)
     );
-    
-    const querySnapshot = await getDocs(q);
-    const history = [];
+    const snapshot = await getDocs(q);
+    const results = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      date: doc.data().date?.toDate().toISOString() || new Date().toISOString()
+    }));
 
-    querySnapshot.forEach((doc) => {
-      history.push({
-        id: doc.id,
-        ...doc.data()
-      });
-    });
-
-    // Sort newest results first
-    return history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    // Sort locally in JavaScript by date (newest first)
+    return results.sort((a, b) => new Date(b.date) - new Date(a.date));
   } catch (error) {
-    console.error("Error fetching candidate exam history:", error);
+    console.error("Error fetching user history:", error);
     return [];
   }
-};
+}
+
+export async function getAllExamResults() {
+  try {
+    const snapshot = await getDocs(collection(db, 'exam_results'));
+    const results = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      date: doc.data().date?.toDate().toISOString() || new Date().toISOString()
+    }));
+
+    // Sort locally in JavaScript by date (newest first)
+    return results.sort((a, b) => new Date(b.date) - new Date(a.date));
+  } catch (error) {
+    console.error("Error fetching global exam results:", error);
+    return [];
+  }
+}

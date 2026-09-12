@@ -4,6 +4,7 @@ import HomeScreen from './components/HomeScreen';
 import SignUpModal from './components/SignUpModal';
 import ExamHistoryModal from './components/ExamHistoryModal';
 import AiTutorModal from './components/AiTutorModal';
+import AdminDashboard from './components/AdminDashboard';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase/config';
 import { getUserProfile } from './services/authServices';
@@ -36,6 +37,9 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [firebaseProfile, setFirebaseProfile] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
+
+  // Portal View Mode ('candidate' or 'admin')
+  const [viewMode, setViewMode] = useState('candidate');
 
   // Local fallback states
   const [localUserProfile, setLocalUserProfile] = useState(null);
@@ -367,6 +371,7 @@ export default function App() {
   };
 
   const getExamTypeLabel = () => {
+    if (viewMode === 'admin') return 'ADMIN CONTROL PORTAL';
     if (!examStarted) return 'JAMB CBT PORTAL';
     const sub = activeSubject ? activeSubject.toUpperCase() : 'CBT EXAM';
     const mode = examMode ? examMode.toUpperCase() : 'PRACTICE';
@@ -386,12 +391,17 @@ export default function App() {
       <Header
         studentName={getCandidateName()}
         examType={getExamTypeLabel()}
-        totalSeconds={timeLeft}
+        totalSeconds={viewMode === 'admin' ? 0 : timeLeft}
+        userEmail={currentUser?.email || activeUserProfile?.email}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
         onOpenAuth={() => setShowSignUp(true)}
       />
 
       <main className="container mx-auto px-4 py-6">
-        {loadingQuestions ? (
+        {viewMode === 'admin' ? (
+          <AdminDashboard currentUser={currentUser} userProfile={activeUserProfile} />
+        ) : loadingQuestions ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
             <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             <p className="text-slate-600 font-semibold text-sm">
