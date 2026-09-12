@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Header({ studentName, examType, totalSeconds = 0 }) {
+export default function Header({ studentName, examType, totalSeconds = 0, userEmail, viewMode, setViewMode }) {
   // Format totalSeconds into HH:MM:SS or MM:SS
   const formatTime = (seconds) => {
     const hrs = Math.floor(seconds / 3600);
@@ -15,6 +15,9 @@ export default function Header({ studentName, examType, totalSeconds = 0 }) {
     return `${pad(mins)}:${pad(secs)}`;
   };
 
+  // Check if current user is admin (matches your email or profile rule)
+  const isAdmin = userEmail === 'bsamgreat1@gmail.com' || studentName?.toLowerCase().includes('david wale');
+
   return (
     <header className="bg-white border-b border-slate-200 px-6 py-4 flex flex-wrap justify-between items-center shadow-sm gap-4">
       {/* Portal / Exam Title */}
@@ -25,6 +28,17 @@ export default function Header({ studentName, examType, totalSeconds = 0 }) {
       </div>
 
       <div className="flex items-center gap-4">
+        {/* Admin Portal Toggle Button */}
+        {isAdmin && setViewMode && (
+          <button
+            onClick={() => setViewMode(viewMode === 'admin' ? 'candidate' : 'admin')}
+            className="flex items-center gap-2 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-xl shadow-sm transition"
+          >
+            <span>🛠️</span>
+            <span>{viewMode === 'admin' ? 'Exit Admin Portal' : 'Admin Portal'}</span>
+          </button>
+        )}
+
         {/* Live Timer Clock (Displays whenever timer is active) */}
         {totalSeconds > 0 && (
           <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 px-3.5 py-1.5 rounded-xl text-xs font-black shadow-sm animate-pulse">
