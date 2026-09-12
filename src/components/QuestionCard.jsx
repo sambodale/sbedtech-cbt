@@ -58,25 +58,32 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
       };
     });
 
+    const currentTime = Date.now();
+    const formattedDate = new Date().toISOString();
     const percentage = Math.round((score / questions.length) * 100);
+
     const resultData = {
-      id: Date.now(),
+      id: currentTime,
+      timestamp: currentTime,
+      date: formattedDate,
       subject,
       mode,
       score,
       total: questions.length,
+      totalQuestions: questions.length,
       percentage,
-      date: new Date().toLocaleString(),
+      userAnswers: selectedAnswers,
       summary: detailedSummary,
     };
 
-    const existingHistory = JSON.parse(localStorage.getItem('sbedtech_exam_history') || '[]');
-    localStorage.setItem('sbedtech_exam_history', JSON.stringify([resultData, ...existingHistory]));
+    // Save to the main unified storage key used by App.jsx & ExamHistoryModal
+    const existingHistory = JSON.parse(localStorage.getItem('sbedtech_history') || '[]');
+    localStorage.setItem('sbedtech_history', JSON.stringify([resultData, ...existingHistory]));
 
     setExamResult(resultData);
     setIsSubmitted(true);
 
-    // Pass result summary back up to App.jsx if needed for tracking
+    // Pass full summary result back up to App.jsx for Firestore sync and state updating
     if (onEndExam) {
       onEndExam(resultData);
     }
