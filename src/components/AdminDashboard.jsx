@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../firebase/config'; // Adjust path if your firebase config is elsewhere
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 export default function AdminDashboard() {
   const [results, setResults] = useState([]);
@@ -9,16 +9,43 @@ export default function AdminDashboard() {
   const [selectedSubject, setSelectedSubject] = useState('All');
 
   useEffect(() => {
-    async function fetchAllResults() {
+    async function fetchAllResultsWithProfiles() {
       try {
         const querySnapshot = await getDocs(collection(db, 'exam_results'));
         const allResults = [];
         
-        querySnapshot.forEach((doc) => {
-          allResults.push({ id: doc.id, ...doc.data() });
-        });
+        // Loop through each exam result and fetch its associated user profile
+        for (const examDoc of querySnapshot.docs) {
+          const data = examDoc.data();
+          let candidateName = 'Unknown User';
 
-        // Sort by newest date/timestamp first if available
+          if (data.userId) {
+            try {
+              // Fetch user profile from your 'users' or 'profiles' collection (adjust name if yours differs)
+              const userRef = doc(db, 'users', data.userId);
+              const userSnap = await getDoc(userRef);
+              
+              if (userSnap.exists()) {
+                const userData = userSnap.data();
+                // Prioritize username, then fullName, then email prefix
+                candidateName = userData.username || userData.fullName || userData.email?.split('@')[0] || data.userId;
+              } else {
+                candidateName = data.userId.substring(0, 8) + '...'; // Fallback shortened ID if no user doc exists
+              }
+            } catch (err) {
+              console.error('Error fetching user profile for ID:', data.userId, err);
+              candidateName = data.userId.substring(0, 8) + '...';
+            }
+          }
+
+          allResults.push({
+            id: examDoc.id,
+            ...data,
+            candidateName, // Attach the resolved username/name here
+          });
+        }
+
+        // Sort by newest date/timestamp first
         allResults.sort((a, b) => {
           const timeA = a.date ? new Date(a.date).getTime() : 0;
           const timeB = b.date ? new Date(b.date).getTime() : 0;
@@ -33,13 +60,13 @@ export default function AdminDashboard() {
       }
     }
 
-    fetchAllResults();
+    fetchAllResultsWithProfiles();
   }, []);
 
-  // Filter logic for search bar and subject dropdown
+  // Filter logic updated to search by candidate name or subject
   const filteredResults = results.filter((item) => {
     const matchesSearch = 
-      (item.userId && item.userId.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (item.candidateName && item.candidateName.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (item.subject && item.subject.toLowerCase().includes(searchTerm.toLowerCase()));
     
     const matchesSubject = selectedSubject === 'All' || item.subject?.toLowerCase() === selectedSubject.toLowerCase();
@@ -47,7 +74,6 @@ export default function AdminDashboard() {
     return matchesSearch && matchesSubject;
   });
 
-  // Calculate quick analytics stats
   const totalSubmissions = results.length;
   const averageScore = totalSubmissions > 0 
     ? Math.round(results.reduce((acc, curr) => acc + (Number(curr.score) || 0), 0) / totalSubmissions) 
@@ -57,7 +83,7 @@ export default function AdminDashboard() {
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-4">
         <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-slate-600 font-semibold text-sm">Loading all candidate results...</p>
+        <p className="text-slate-600 font-semibold text-sm">Loading candidate profiles and scores...</p>
       </div>
     );
   }
@@ -68,7 +94,7 @@ export default function AdminDashboard() {
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Administrator Portal</h1>
-          <p className="text-slate-500 text-sm">Monitor candidate submissions, scores, and CBT exam history.</p>
+          <p className="text-slate-500 text-sm">Monitor candidate usernames, submissions, scores, and exam history.</p>
         </div>
         <div className="flex gap-4">
           <div className="bg-blue-50 px-4 py-3 rounded-xl border border-blue-100 text-center">
@@ -86,7 +112,7 @@ export default function AdminDashboard() {
       <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between gap-4">
         <input
           type="text"
-          placeholder="Search by User ID or Subject..."
+          placeholder="Search by Username or Subject..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full sm:w-80 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
@@ -111,7 +137,7 @@ export default function AdminDashboard() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 text-slate-600 text-xs uppercase font-semibold border-b border-slate-200">
-                <th className="px-6 py-4">Candidate / User ID</th>
+                <th className="px-6 py-4">Candidate Username</th>
                 <th className="px-6 py-4">Subject</th>
                 <th className="px-6 py-4">Score</th>
                 <th className="px-6 py-4">Total Questions</th>
@@ -122,8 +148,11 @@ export default function AdminDashboard() {
               {filteredResults.length > 0 ? (
                 filteredResults.map((record) => (
                   <tr key={record.id} className="hover:bg-slate-50 transition">
-                    <td className="px-6 py-4 font-medium text-slate-900 truncate max-w-xs">
-                      {record.userId || 'Unknown ID'}
+                    <td className="px-6 py-4 font-semibold text-slate-900 flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs uppercase font-bold">
+                        {record.candidateName.charAt(0)}
+                      </div>
+                      <span className="truncate max-w-xs">{record.candidateName}</span>
                     </td>
                     <td className="px-6 py-4 text-slate-700 font-medium">
                       {record.subject || 'N/A'}
