@@ -133,7 +133,7 @@ export default function App() {
       if (submitExamRef.current) {
         submitExamRef.current();
       } else {
-        handleEndExam({ score: 0, totalQuestions: questions.length || 40, timeSpentSeconds: 0 });
+        handleEndExam({ score: 0, totalQuestions: questions.length || 40, timeSpentSeconds: 0, summary: [] });
       }
       return;
     }
@@ -331,13 +331,21 @@ export default function App() {
 
   const handleEndExam = async (summaryData) => {
     if (summaryData) {
+      const currentTime = Date.now();
+      const formattedDate = new Date().toISOString();
+      const totalQ = summaryData.totalQuestions || questions.length || 40;
+      const scoreVal = summaryData.score || 0;
+
       const newRecord = {
-        id: Date.now(),
-        date: new Date().toISOString(),
+        id: currentTime,
+        timestamp: currentTime,
+        date: formattedDate,
         subject: activeSubject,
         mode: examMode,
-        score: summaryData.score || 0,
-        totalQuestions: summaryData.totalQuestions || questions.length || 40,
+        score: scoreVal,
+        totalQuestions: totalQ,
+        percentage: summaryData.percentage || Math.round((scoreVal / totalQ) * 100),
+        summary: summaryData.summary || [] // Captures the full breakdown correctly!
       };
 
       if (currentUser?.uid) {
@@ -347,7 +355,9 @@ export default function App() {
             score: newRecord.score,
             totalQuestions: newRecord.totalQuestions,
             timeSpentSeconds: summaryData.timeSpentSeconds || 0,
-            userAnswers: summaryData.userAnswers || {}
+            userAnswers: summaryData.userAnswers || {},
+            summary: newRecord.summary,
+            date: formattedDate
           });
         } catch (err) {
           console.error("Failed to sync result to Firestore:", err);
