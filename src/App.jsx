@@ -38,19 +38,15 @@ export default function App() {
   const [firebaseProfile, setFirebaseProfile] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
 
-  // Portal View Mode ('candidate' or 'admin')
   const [viewMode, setViewMode] = useState('candidate');
 
-  // Local fallback states
   const [localUserProfile, setLocalUserProfile] = useState(null);
   const [localActivated, setLocalActivated] = useState(false);
   
-  // Modals
   const [showSignUp, setShowSignUp] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showAiTutorModal, setShowAiTutorModal] = useState(false);
   
-  // Exam state
   const [pendingAction, setPendingAction] = useState(null);
   const [activeSubject, setActiveSubject] = useState('');
   const [examMode, setExamMode] = useState('practice');
@@ -58,17 +54,13 @@ export default function App() {
   const [examStarted, setExamStarted] = useState(false);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   
-  // History tracking
   const [examHistory, setExamHistory] = useState([]);
 
-  // Timer state
   const [timeLeft, setTimeLeft] = useState(null);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
 
-  // Ref for auto-submitting when timer hits zero
   const submitExamRef = useRef(null);
 
-  // Auth Listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
@@ -88,12 +80,10 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Combined Active Profile
   const activeUserProfile = currentUser 
     ? { email: currentUser.email, ...firebaseProfile }
     : localUserProfile;
 
-  // Sync History & Activation Status
   useEffect(() => {
     const loadUserData = async () => {
       const savedUser = localStorage.getItem('sbedtech_user');
@@ -122,14 +112,12 @@ export default function App() {
     loadUserData();
   }, [currentUser]);
 
-  // Timer Countdown Effect with Real Auto-Submit Integration
   useEffect(() => {
     if (!isTimerRunning || timeLeft === null) return;
 
     if (timeLeft <= 0) {
       setIsTimerRunning(false);
       
-      // Instantly invoke QuestionCard's submit handler to grade active answers
       if (submitExamRef.current) {
         submitExamRef.current();
       } else {
@@ -200,22 +188,16 @@ export default function App() {
     setExamMode(mode || 'practice');
 
     try {
-      const topicParam = topic && topic !== 'All Topics' ? `&topic=${encodeURIComponent(topic)}` : '';
-      const response = await fetch(
-        `/api/get-questions?subject=${encodeURIComponent(cleanSubject)}&year=${encodeURIComponent(year || 'random')}${topicParam}&limit=${limit || 40}`
-      );
+      // Directly call your AI / client-side generator instead of an external API route
+      let fetchedQuestions = await generateTopicQuestions({
+        subject: cleanSubject,
+        topic: topic || 'General JAMB Syllabus',
+        limit: parseInt(limit, 10) || 20,
+        year: year || '2026',
+        examType: 'UTME',
+      });
 
-      let fetchedQuestions = [];
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result && result.data && result.data.length > 0) {
-          fetchedQuestions = result.data;
-        }
-      }
-
-      // Filter by Official JAMB Prescribed Text for English
-      if (cleanSubject === 'english') {
+      if (cleanSubject === 'english' && fetchedQuestions && fetchedQuestions.length > 0) {
         const selectedYear = (year === 'Random' || !year) ? '2026' : year;
         const targetNovel = JAMB_ENGLISH_NOVELS[selectedYear] || 'The Lekki Headmaster';
 
@@ -231,19 +213,7 @@ export default function App() {
         });
       }
 
-      // AI Expert Tutor Fallback
-      if (fetchedQuestions.length === 0) {
-        console.log(`No database questions found for ${cleanSubject}. Generating via AI Tutor...`);
-        fetchedQuestions = await generateTopicQuestions({
-          subject: cleanSubject,
-          topic: topic || 'General JAMB Syllabus',
-          limit: parseInt(limit, 10) || 20,
-          year: year || '2026',
-          examType: 'UTME',
-        });
-      }
-
-      if (fetchedQuestions.length > 0) {
+      if (fetchedQuestions && fetchedQuestions.length > 0) {
         const formattedQuestions = fetchedQuestions.map((q) => {
           let options = q.option || q.options || {};
 
@@ -276,10 +246,10 @@ export default function App() {
         return;
       }
 
-      throw new Error('Could not retrieve or generate questions.');
+      throw new Error('Could not generate questions.');
     } catch (error) {
-      console.error('Error fetching questions:', error);
-      alert(`Could not fetch questions for ${subject}. Generating AI topic drill...`);
+      console.error('Error loading questions:', error);
+      alert(`Could not load questions for ${subject}. Please check your connection and try again.`);
     } finally {
       setLoadingQuestions(false);
     }
@@ -345,20 +315,24 @@ export default function App() {
         score: scoreVal,
         totalQuestions: totalQ,
         percentage: summaryData.percentage || Math.round((scoreVal / totalQ) * 100),
-        summary: summaryData.summary || [] // Captures the full breakdown correctly!
+        summary: summaryData.summary || []
       };
 
       if (currentUser?.uid) {
         try {
-          await saveExamResult(currentUser.uid, {
-            subject: activeSubject,
-            score: newRecord.score,
-            totalQuestions: newRecord.totalQuestions,
-            timeSpentSeconds: summaryData.timeSpentSeconds || 0,
-            userAnswers: summaryData.userAnswers || {},
-            summary: newRecord.summary,
-            date: formattedDate
-          });
+          await saveExamResult(
+            currentUser.uid, 
+            getCandidateName(),
+            {
+              subject: activeSubject,
+              score: newRecord.score,
+              totalQuestions: newRecord.totalQuestions,
+              timeSpentSeconds: summaryData.timeSpentSeconds || 0,
+              userAnswers: summaryData.userAnswers || {},
+              summary: newRecord.summary,
+              date: formattedDate
+            }
+          );
         } catch (err) {
           console.error("Failed to sync result to Firestore:", err);
         }
@@ -386,7 +360,7 @@ export default function App() {
     if (currentUser?.email) return currentUser.email.split('@')[0];
     if (activeUserProfile?.email) return activeUserProfile.email.split('@')[0];
 
-    return 'Guest User';
+    return 'David wale';
   };
 
   const getExamTypeLabel = () => {
@@ -424,7 +398,7 @@ export default function App() {
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
             <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             <p className="text-slate-600 font-semibold text-sm">
-              Fetching questions and aligning with selected JAMB topic...
+              Generating practice questions and aligning with selected JAMB syllabus...
             </p>
           </div>
         ) : !examStarted ? (

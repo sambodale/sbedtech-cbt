@@ -177,7 +177,7 @@ export default function HomeScreen({
   onStartWeaknessDrill,
   onOpenActivation,
   onOpenHistory,
-  onOpenAiTutor, // Callback function to launch the AI Expert Tutor
+  onOpenAiTutor,
 }) {
   const [selectedSubject, setSelectedSubject] = useState('');
   const [showSetupPanel, setShowSetupPanel] = useState(false);
@@ -421,14 +421,11 @@ export default function HomeScreen({
         )}
       </div>
 
-      {/* 2. SBEDTECH AI EXPERT TUTOR HYBRID CARD (RIGHT ABOVE DASHBOARD) */}
+      {/* 2. SBEDTECH AI EXPERT TUTOR HYBRID CARD */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 rounded-3xl p-6 sm:p-7 text-white shadow-xl border border-indigo-800/40 relative overflow-hidden">
-        {/* Background Accent Glow */}
         <div className="absolute -top-12 -right-12 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
         
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
-          
-          {/* Card Left Header Details */}
           <div className="space-y-2.5 max-w-xl">
             <div className="flex items-center gap-2.5">
               <span className="px-3 py-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-[10px] font-black uppercase tracking-wider rounded-full shadow-sm">
@@ -448,7 +445,6 @@ export default function HomeScreen({
             </p>
           </div>
 
-          {/* Card Right Action Area */}
           <div className="w-full md:w-auto flex flex-col items-stretch md:items-end gap-2 shrink-0">
             {isActivated ? (
               <button
@@ -474,7 +470,6 @@ export default function HomeScreen({
               </div>
             )}
           </div>
-
         </div>
       </div>
 

@@ -8,6 +8,16 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
   const [showReview, setShowReview] = useState(false);
   const [examResult, setExamResult] = useState(null);
 
+  // Load and manage bookmarks for this specific subject
+  const [bookmarkedIds, setBookmarkedIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`sbedtech_bookmarks_${subject}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
   const currentQuestion = questions[currentIndex];
 
   if (!currentQuestion && !isSubmitted) {
@@ -33,6 +43,20 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
       ...prev,
       [currentIndex]: key,
     }));
+  };
+
+  const handleToggleBookmark = (questionId) => {
+    setBookmarkedIds((prev) => {
+      let updated;
+      if (prev.includes(questionId)) {
+        updated = prev.filter((id) => id !== questionId);
+      } else {
+        updated = [...prev, questionId];
+      }
+      // Save instantly to localStorage for offline access
+      localStorage.setItem(`sbedtech_bookmarks_${subject}`, JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const handleSubmitExam = () => {
@@ -221,6 +245,9 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
   }
 
   // --- 3. ACTIVE SIDE-BY-SIDE EXAM VIEW ---
+  const currentQuestionId = currentQuestion?.id || currentIndex;
+  const isBookmarked = bookmarkedIds.includes(currentQuestionId);
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-2">
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
@@ -236,13 +263,29 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
                 Question {currentIndex + 1} of {questions.length}
               </h2>
             </div>
-            <button
-              type="button"
-              onClick={onEndExam}
-              className="text-xs text-red-600 font-semibold hover:bg-red-50 px-3 py-1.5 rounded-lg transition"
-            >
-              Quit Exam
-            </button>
+
+            <div className="flex items-center gap-3">
+              {/* Bookmark Toggle Button */}
+              <button
+                type="button"
+                onClick={() => handleToggleBookmark(currentQuestionId)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border ${
+                  isBookmarked
+                    ? 'bg-amber-50 text-amber-700 border-amber-300 shadow-sm'
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200'
+                }`}
+              >
+                <span>{isBookmarked ? '★ Bookmarked' : '☆ Bookmark'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={onEndExam}
+                className="text-xs text-red-600 font-semibold hover:bg-red-50 px-3 py-1.5 rounded-lg transition"
+              >
+                Quit Exam
+              </button>
+            </div>
           </div>
 
           {/* QUESTION TEXT */}
