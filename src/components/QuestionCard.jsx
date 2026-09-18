@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import QuestionPalette from './QuestionPalette';
+import CalculatorModal from './CalculatorModal';
 
 export default function QuestionCard({ subject, mode, questions, onEndExam, onSubmitRef }) {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -7,8 +8,15 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [showReview, setShowReview] = useState(false);
   const [examResult, setExamResult] = useState(null);
+  
+  // Calculator Modal state
+  const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
 
-  // Load and manage bookmarks for this specific subject
+  // Tab-switching and security integrity state
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const MAX_ALLOWED_VIOLATIONS = 1; // 1 warning before automatic submission
+
+  // Load and manage bookmarks for this specific subject/session
   const [bookmarkedIds, setBookmarkedIds] = useState(() => {
     try {
       const saved = localStorage.getItem(`sbedtech_bookmarks_${subject}`);
@@ -17,6 +25,74 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
       return [];
     }
   });
+
+  // --- SECURE MONITORING: DESKTOP (FULLSCREEN + VISIBILITY) vs MOBILE (VISIBILITY ONLY) ---
+  useEffect(() => {
+    if (isSubmitted || mode === 'practice') return; // Bypass security checks if in practice mode
+
+    const isDesktop = window.innerWidth >= 1024; // Identify desktop viewports
+
+    const enterFullscreen = async () => {
+      if (isDesktop) {
+        try {
+          if (!document.fullscreenElement) {
+            await document.documentElement.requestFullscreen();
+          }
+        } catch (err) {
+          console.log('Fullscreen request skipped or restricted by browser settings.');
+        }
+      }
+    };
+    enterFullscreen();
+
+    const handleSecurityViolation = () => {
+      if (isSubmitted || mode === 'practice') return;
+
+      const isHidden = document.hidden;
+      const isExitedFullscreen = isDesktop && !document.fullscreenElement;
+
+      if (isHidden || isExitedFullscreen) {
+        triggerViolationProtocol(
+          isHidden 
+            ? '⚠️ You switched tabs or minimized the browser.' 
+            : '⚠️ You exited fullscreen mode.'
+        );
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleSecurityViolation);
+    if (isDesktop) {
+      document.addEventListener('fullscreenchange', handleSecurityViolation);
+    }
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleSecurityViolation);
+      if (isDesktop) {
+        document.removeEventListener('fullscreenchange', handleSecurityViolation);
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+    };
+  }, [isSubmitted, mode, tabSwitchCount]);
+
+  const triggerViolationProtocol = (reason) => {
+    if (isSubmitted) return;
+    const newCount = tabSwitchCount + 1;
+    setTabSwitchCount(newCount);
+
+    if (newCount >= MAX_ALLOWED_VIOLATIONS) {
+      alert(`${reason} Security limit reached. Your exam is now being submitted automatically.`);
+      handleSubmitExam();
+    } else {
+      alert(`${reason} Warning ${newCount}/${MAX_ALLOWED_VIOLATIONS}: Please remain on the exam tab. Further violations will result in automatic submission!`);
+      try {
+        if (window.innerWidth >= 1024 && !document.fullscreenElement) {
+          document.documentElement.requestFullscreen();
+        }
+      } catch (e) {}
+    }
+  };
 
   const currentQuestion = questions[currentIndex];
 
@@ -53,14 +129,78 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
       } else {
         updated = [...prev, questionId];
       }
-      // Save instantly to localStorage for offline access
       localStorage.setItem(`sbedtech_bookmarks_${subject}`, JSON.stringify(updated));
       return updated;
     });
   };
 
+  // --- PDF EXPORT FOR BOOKMARKED QUESTIONS ---
+  const handleDownloadBookmarksPdf = () => {
+    const bookmarkedQuestionsList = questions.filter((q, idx) => {
+      const qId = q.id || idx;
+      return bookmarkedIds.includes(qId);
+    });
+
+    if (bookmarkedQuestionsList.length === 0) {
+      alert('No bookmarked questions found to export for this subject.');
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Study Notes: Bookmarked ${subject} Questions</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 25px; color: #1e293b; line-height: 1.5; }
+            h1 { text-align: center; color: #047857; margin-bottom: 5px; }
+            .subtitle { text-align: center; color: #64748b; font-size: 14px; margin-bottom: 25px; }
+            .question-box { margin-bottom: 25px; border-bottom: 1px solid #e2e8f0; padding-bottom: 20px; page-break-inside: avoid; }
+            .q-title { font-weight: bold; font-size: 16px; margin-bottom: 10px; }
+            .options { margin-left: 20px; margin-bottom: 10px; }
+            .options div { margin-bottom: 4px; }
+            .answer-box { background: #f0fdf4; border: 1px solid #bbf7d0; padding: 10px; border-radius: 8px; color: #166534; font-size: 14px; }
+            .explanation { margin-top: 6px; font-style: italic; color: #334155; }
+          </style>
+        </head>
+        <body>
+          <h1>SbedTech CBT Study Guide</h1>
+          <div class="subtitle">Bookmarked Questions for: ${subject}</div>
+          <hr style="border: 0; border-top: 1px solid #cbd5e1; margin-bottom: 20px;" />
+          
+          ${bookmarkedQuestionsList.map((q, index) => `
+            <div class="question-box">
+              <div class="q-title">Q${index + 1}: ${q.question}</div>
+              <div class="options">
+                <div><strong>A)</strong> ${q.options?.a || q.options?.A || ''}</div>
+                <div><strong>B)</strong> ${q.options?.b || q.options?.B || ''}</div>
+                <div><strong>C)</strong> ${q.options?.c || q.options?.C || ''}</div>
+                <div><strong>D)</strong> ${q.options?.d || q.options?.D || ''}</div>
+              </div>
+              <div class="answer-box">
+                <strong>Correct Answer:</strong> ${(q.answer || '').toUpperCase()}
+                ${q.explanation ? `<div class="explanation"><strong>Explanation:</strong> ${q.explanation}</div>` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 500);
+  };
+
   const handleSubmitExam = () => {
-    if (isSubmitted) return; // Prevent duplicate submissions
+    if (isSubmitted) return;
+
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
 
     let score = 0;
     const detailedSummary = questions.map((q, idx) => {
@@ -100,20 +240,17 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
       summary: detailedSummary,
     };
 
-    // Save to the main unified storage key used by App.jsx & ExamHistoryModal
     const existingHistory = JSON.parse(localStorage.getItem('sbedtech_history') || '[]');
     localStorage.setItem('sbedtech_history', JSON.stringify([resultData, ...existingHistory]));
 
     setExamResult(resultData);
     setIsSubmitted(true);
 
-    // Pass full summary result back up to App.jsx for Firestore sync and state updating
     if (onEndExam) {
       onEndExam(resultData);
     }
   };
 
-  // Bind this internal submit handler to App.jsx's ref for timer auto-submit
   useEffect(() => {
     if (onSubmitRef) {
       onSubmitRef.current = handleSubmitExam;
@@ -147,18 +284,30 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+        <div className="flex flex-col sm:flex-row gap-3 justify-center mb-4">
           <button
             onClick={() => setShowReview(true)}
             className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl shadow-md transition"
           >
             Check Missed Questions & Explanations
           </button>
+          
+          {bookmarkedIds.length > 0 && (
+            <button
+              onClick={handleDownloadBookmarksPdf}
+              className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-md transition flex items-center justify-center gap-2"
+            >
+              <span>📥 Download Bookmarks (PDF)</span>
+            </button>
+          )}
+        </div>
+
+        <div>
           <button
             onClick={onEndExam}
-            className="px-6 py-3 border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold rounded-xl transition"
+            className="text-sm text-slate-500 hover:text-slate-800 font-semibold underline transition"
           >
-            Back to Dashboard
+            Return to Dashboard
           </button>
         </div>
       </div>
@@ -174,12 +323,22 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
             <h2 className="text-xl font-bold text-slate-800">Exam Review & Explanations</h2>
             <p className="text-xs text-slate-500 mt-1">{subject} • {examResult?.score} / {examResult?.total} Correct</p>
           </div>
-          <button
-            onClick={onEndExam}
-            className="px-4 py-2 bg-slate-800 text-white text-xs font-semibold rounded-lg hover:bg-slate-900 transition"
-          >
-            Finish Review
-          </button>
+          <div className="flex items-center gap-2">
+            {bookmarkedIds.length > 0 && (
+              <button
+                onClick={handleDownloadBookmarksPdf}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition"
+              >
+                📥 Download Bookmarks PDF
+              </button>
+            )}
+            <button
+              onClick={onEndExam}
+              className="px-4 py-2 bg-slate-800 text-white text-xs font-semibold rounded-lg hover:bg-slate-900 transition"
+            >
+              Finish Review
+            </button>
+          </div>
         </div>
 
         <div className="space-y-6 max-h-[65vh] overflow-y-auto pr-2">
@@ -264,7 +423,16 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
               </h2>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {/* Built-in Calculator Trigger Button */}
+              <button
+                type="button"
+                onClick={() => setIsCalculatorOpen(true)}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 transition flex items-center gap-1 shadow-xs"
+              >
+                <span>🧮 Calculator</span>
+              </button>
+
               {/* Bookmark Toggle Button */}
               <button
                 type="button"
@@ -278,12 +446,23 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
                 <span>{isBookmarked ? '★ Bookmarked' : '☆ Bookmark'}</span>
               </button>
 
+              {bookmarkedIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleDownloadBookmarksPdf}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-white hover:bg-slate-900 transition flex items-center gap-1"
+                  title="Download all bookmarked questions as PDF"
+                >
+                  <span>📥 PDF ({bookmarkedIds.length})</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={onEndExam}
                 className="text-xs text-red-600 font-semibold hover:bg-red-50 px-3 py-1.5 rounded-lg transition"
               >
-                Quit Exam
+                Quit
               </button>
             </div>
           </div>
@@ -368,10 +547,10 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
           </div>
         </div>
 
-        {/* Right 1 Column: QuestionPalette Component & Submit Button */}
+        {/* Right 1 Column: Upgraded Grouped QuestionPalette Component & Submit Button */}
         <div className="lg:col-span-1 sticky top-6 space-y-3">
           <QuestionPalette
-            totalQuestions={questions.length}
+            questions={questions}
             currentIndex={currentIndex}
             userAnswers={selectedAnswers}
             onSelectQuestion={(index) => setCurrentIndex(index)}
@@ -391,6 +570,12 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
         </div>
 
       </div>
+
+      {/* Calculator Modal Integration */}
+      <CalculatorModal
+        isOpen={isCalculatorOpen}
+        onClose={() => setIsCalculatorOpen(false)}
+      />
     </div>
   );
 }

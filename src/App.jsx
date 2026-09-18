@@ -5,10 +5,12 @@ import SignUpModal from './components/SignUpModal';
 import ExamHistoryModal from './components/ExamHistoryModal';
 import AiTutorModal from './components/AiTutorModal';
 import AdminDashboard from './components/AdminDashboard';
+import PaystackModal from './components/PaystackModal';
+import AdminPinModal from './components/AdminPinModal'; 
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase/config';
 import { getUserProfile } from './services/authServices';
-import { saveExamResult, getUserExamHistory } from './services/examServices';
+import { saveExamResult, getUserExamHistory, verifyCandidateExamAccess } from './services/examServices';
 import { generateTopicQuestions } from './services/aiQuestionGenerator';
 
 const QuestionCard = lazy(() => import('./components/QuestionCard'));
@@ -46,6 +48,8 @@ export default function App() {
   const [showSignUp, setShowSignUp] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showAiTutorModal, setShowAiTutorModal] = useState(false);
+  const [showPaystackModal, setShowPaystackModal] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
   
   const [pendingAction, setPendingAction] = useState(null);
   const [activeSubject, setActiveSubject] = useState('');
@@ -68,6 +72,10 @@ export default function App() {
         try {
           const profileData = await getUserProfile(user.uid);
           setFirebaseProfile(profileData);
+
+          // Check if exam mode is unlocked in Firestore
+          const hasAccess = await verifyCandidateExamAccess(user.uid);
+          if (hasAccess) setLocalActivated(true);
         } catch (error) {
           console.error("Error loading user profile:", error);
         }
@@ -188,7 +196,6 @@ export default function App() {
     setExamMode(mode || 'practice');
 
     try {
-      // Directly call your AI / client-side generator instead of an external API route
       let fetchedQuestions = await generateTopicQuestions({
         subject: cleanSubject,
         topic: topic || 'General JAMB Syllabus',
@@ -296,7 +303,14 @@ export default function App() {
       setShowSignUp(true);
       return;
     }
-    alert('Redirecting to payment gateway for Exam Mode activation...');
+    setShowPaystackModal(true);
+  };
+
+  const handlePaymentSuccess = () => {
+    setLocalActivated(true);
+    localStorage.setItem('sbedtech_activated', 'true');
+    setShowPaystackModal(false);
+    alert("Payment submitted for admin review! Once confirmed, you can enter your activation pin.");
   };
 
   const handleEndExam = async (summaryData) => {
@@ -360,7 +374,7 @@ export default function App() {
     if (currentUser?.email) return currentUser.email.split('@')[0];
     if (activeUserProfile?.email) return activeUserProfile.email.split('@')[0];
 
-    return 'David wale';
+    return 'Candidate';
   };
 
   const getExamTypeLabel = () => {
@@ -404,12 +418,14 @@ export default function App() {
         ) : !examStarted ? (
           <HomeScreen
             userProfile={activeUserProfile}
+            currentUser={currentUser}
             history={examHistory}
             isActivated={localActivated}
             onStartExam={handleStartExam}
             onStartWeaknessDrill={handleStartWeaknessDrill}
             onOpenSignUp={() => setShowSignUp(true)}
             onOpenActivation={handleOpenActivation}
+            onOpenPinActivation={() => setShowPinModal(true)}
             onOpenHistory={() => setShowHistoryModal(true)}
             onOpenAiTutor={handleOpenAiTutor}
           />
@@ -468,6 +484,29 @@ export default function App() {
           isOpen={showAiTutorModal}
           onClose={() => setShowAiTutorModal(false)}
           userProfile={activeUserProfile}
+        />
+      )}
+
+      {showPaystackModal && (
+        <PaystackModal
+          isOpen={showPaystackModal}
+          onClose={() => setShowPaystackModal(false)}
+          userEmail={currentUser?.email || activeUserProfile?.email}
+          userName={getCandidateName()}
+          userId={currentUser?.uid || localUserProfile?.id || 'guest_user'}
+          onSuccess={handlePaymentSuccess}
+        />
+      )}
+
+      {showPinModal && (
+        <AdminPinModal
+          isOpen={showPinModal}
+          onClose={() => setShowPinModal(false)}
+          currentUser={currentUser}
+          onPinVerified={() => {
+            setLocalActivated(true);
+            localStorage.setItem('sbedtech_activated', 'true');
+          }}
         />
       )}
     </div>

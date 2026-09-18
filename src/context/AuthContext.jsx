@@ -15,10 +15,17 @@ export function AuthProvider({ children }) {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       if (user) {
-        // Fetch candidate activation status and role from Firestore
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          setUserProfile(userDoc.data());
+        try {
+          // Fetch candidate activation status and role from the 'students' collection
+          const userDoc = await getDoc(doc(db, 'students', user.uid));
+          if (userDoc.exists()) {
+            setUserProfile(userDoc.data());
+          } else {
+            setUserProfile(null);
+          }
+        } catch (error) {
+          console.error("Error fetching user profile in AuthContext:", error);
+          setUserProfile(null);
         }
       } else {
         setUserProfile(null);
@@ -29,10 +36,18 @@ export function AuthProvider({ children }) {
     return unsubscribe;
   }, []);
 
+  // Compute activation status checking Firestore data first, with localStorage fallback
+  const localActivationFallback = typeof window !== 'undefined' && localStorage.getItem('sbedtech_activated') === 'true';
+  const isActivated = Boolean(
+    userProfile?.isExamModeUnlocked || 
+    userProfile?.isActivated || 
+    localActivationFallback
+  );
+
   const value = {
     currentUser,
     userProfile,
-    isActivated: userProfile?.isActivated || false,
+    isActivated,
     isAdmin: userProfile?.role === 'admin'
   };
 

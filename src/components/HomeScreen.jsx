@@ -176,6 +176,7 @@ export default function HomeScreen({
   onStartExam,
   onStartWeaknessDrill,
   onOpenActivation,
+  onOpenPinActivation, // 🔑 Dedicated admin pin modal trigger
   onOpenHistory,
   onOpenAiTutor,
 }) {
@@ -188,11 +189,15 @@ export default function HomeScreen({
   const [durationHours, setDurationHours] = useState('1');
   const [durationMinutes, setDurationMinutes] = useState('30');
   const [totalQuestions, setTotalQuestions] = useState('40');
+  
+  // Test Mode toggle (requires activation for 'exam')
+  const [testMode, setTestMode] = useState('practice');
 
   const handleSubjectChange = (e) => {
     const subjectName = e.target.value;
     setSelectedSubject(subjectName);
     setSelectedTopic('All Topics');
+    setTestMode('practice');
     if (subjectName) {
       setShowSetupPanel(true);
     }
@@ -202,9 +207,16 @@ export default function HomeScreen({
     e.preventDefault();
     if (!selectedSubject) return;
 
+    // 🔒 Enforce that Exam Mode requires activation
+    if (testMode === 'exam' && !isActivated) {
+      alert("Official Exam Mode requires an admin-confirmed activation pin or online payment verification.");
+      onOpenPinActivation();
+      return;
+    }
+
     const hoursInMins = parseInt(durationHours || '0', 10) * 60;
     const mins = parseInt(durationMinutes || '0', 10);
-    const totalDuration = hoursInMins + mins || 90;
+    const totalDuration = testMode === 'exam' ? 120 : (hoursInMins + mins || 90);
 
     const cleanYear = examYearMode.includes('Random')
       ? 'Random'
@@ -212,11 +224,11 @@ export default function HomeScreen({
 
     onStartExam({
       subject: selectedSubject,
-      mode: 'practice',
+      mode: testMode,
       year: cleanYear || 'Random',
       topic: selectedTopic === 'All Topics' ? '' : selectedTopic,
       durationInMinutes: totalDuration,
-      limit: parseInt(totalQuestions, 10) || 40,
+      limit: testMode === 'exam' ? 40 : (parseInt(totalQuestions, 10) || 40),
     });
   };
 
@@ -235,7 +247,7 @@ export default function HomeScreen({
               SbedTech CBT Portal
             </h1>
             <p className="text-sm font-medium text-slate-500 max-w-md mx-auto">
-              Welcome back, <span className="font-bold text-slate-800">{userProfile?.fullName || 'Candidate'}</span>! Select a subject to configure your setup.
+              Welcome back, <span className="font-bold text-slate-800">{userProfile?.fullName || userProfile?.username || userProfile?.email || 'Candidate'}</span>! Select a subject to configure your setup.
             </p>
           </div>
 
@@ -290,6 +302,42 @@ export default function HomeScreen({
             <form onSubmit={handleLaunchCbt} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 
+                {/* Session Mode Selector: Practice vs Official Exam */}
+                <div className="space-y-1 sm:col-span-2 bg-blue-50 p-3 rounded-xl border border-blue-100">
+                  <label className="block text-xs font-black text-blue-900 uppercase tracking-wider mb-1.5">
+                    Select Session Mode
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTestMode('exam')}
+                      className={`py-2 px-3 text-xs font-bold rounded-lg transition ${
+                        testMode === 'exam'
+                          ? 'bg-emerald-600 text-white shadow'
+                          : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      🚀 Full Exam Mode {!isActivated && '🔒'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTestMode('practice')}
+                      className={`py-2 px-3 text-xs font-bold rounded-lg transition ${
+                        testMode === 'practice'
+                          ? 'bg-blue-600 text-white shadow'
+                          : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      📚 Practice Mode (Free)
+                    </button>
+                  </div>
+                  {testMode === 'exam' && !isActivated && (
+                    <p className="text-[11px] text-amber-700 font-bold mt-1">
+                      ⚠️ Requires activation pin confirmed by admin after payment.
+                    </p>
+                  )}
+                </div>
+
                 {/* Exam Year / Mode */}
                 <div className="space-y-1 sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-600">
@@ -328,57 +376,64 @@ export default function HomeScreen({
                   </select>
                 </div>
 
-                {/* Duration Hours */}
+                {/* Duration Hours (Disabled in official exam mode to enforce 2 hours) */}
                 <div className="space-y-1">
                   <label className="block text-xs font-bold text-slate-600">
-                    Duration (Hours)
+                    Duration (Hours) {testMode === 'exam' && '(Fixed: 2h)'}
                   </label>
                   <input
                     type="number"
                     min="0"
                     max="5"
-                    value={durationHours}
+                    disabled={testMode === 'exam'}
+                    value={testMode === 'exam' ? 2 : durationHours}
                     onChange={(e) => setDurationHours(e.target.value)}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                   />
                 </div>
 
                 {/* Duration Minutes */}
                 <div className="space-y-1">
                   <label className="block text-xs font-bold text-slate-600">
-                    Duration (Minutes)
+                    Duration (Minutes) {testMode === 'exam' && '(Fixed: 0m)'}
                   </label>
                   <input
                     type="number"
                     min="0"
                     max="59"
-                    value={durationMinutes}
+                    disabled={testMode === 'exam'}
+                    value={testMode === 'exam' ? 0 : durationMinutes}
                     onChange={(e) => setDurationMinutes(e.target.value)}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                   />
                 </div>
 
                 {/* Total Questions */}
                 <div className="space-y-1 sm:col-span-2">
                   <label className="block text-xs font-bold text-slate-600">
-                    Total Questions
+                    Total Questions {testMode === 'exam' && '(Fixed to 40)'}
                   </label>
                   <input
                     type="number"
                     min="5"
                     max="100"
-                    value={totalQuestions}
+                    disabled={testMode === 'exam'}
+                    value={testMode === 'exam' ? 40 : totalQuestions}
                     onChange={(e) => setTotalQuestions(e.target.value)}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                   />
                 </div>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-2xl shadow-md transition"
+                className={`w-full py-3.5 font-extrabold text-sm rounded-2xl shadow-md transition text-white ${
+                  testMode === 'exam'
+                    ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/25'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}
               >
-                Start {selectedSubject} ({selectedTopic !== 'All Topics' ? selectedTopic : examYearMode}) - Practice Mode
+                {testMode === 'exam' ? '🚀 Launch Official Exam Mode (2 Hours)' : `▶ Start ${selectedSubject} Practice`}
               </button>
             </form>
           </div>
@@ -390,7 +445,7 @@ export default function HomeScreen({
                   ⚠️ Action Required: Activate Exam Mode
                 </h4>
                 <p className="text-xs text-amber-800 font-medium">
-                  Unlock full platform capabilities and expert exam tools:
+                  Practice mode is completely free. To unlock official timed mock exams and expert tools, choose your preferred option below:
                 </p>
               </div>
 
@@ -399,23 +454,32 @@ export default function HomeScreen({
                   <span className="text-emerald-600 font-bold">✓</span> Full timed mock examinations with official JAMB grading algorithms
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-emerald-600 font-bold">✓</span> Access to Comprehensive study materials
+                  <span className="text-emerald-600 font-bold">✓</span> Access to comprehensive study materials
                 </li>
                 <li className="flex items-center gap-2">
                   <span className="text-emerald-600 font-bold">✓</span> Live AI Tutor / Fully Trained Expert System
                 </li>
-                <li className="flex items-center gap-2">
-                  <span className="text-emerald-600 font-bold">✓</span> One-on-One online Tutorial
-                </li>
               </ul>
 
-              <button
-                type="button"
-                onClick={onOpenActivation}
-                className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs rounded-2xl shadow transition"
-              >
-                Unlock Exam Mode Now
-              </button>
+              <div className="space-y-2 pt-2">
+                {/* 1. Pay Online via Paystack */}
+                <button
+                  type="button"
+                  onClick={onOpenActivation}
+                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-2xl shadow-md transition flex items-center justify-center gap-2"
+                >
+                  <span>💳 Pay Online via Paystack</span>
+                </button>
+
+                {/* 2. Admin Pin Entry */}
+                <button
+                  type="button"
+                  onClick={onOpenPinActivation}
+                  className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-2xl shadow-sm transition flex items-center justify-center gap-2"
+                >
+                  <span>🔑 Enter Activation Pin from Admin</span>
+                </button>
+              </div>
             </div>
           )
         )}
@@ -460,9 +524,9 @@ export default function HomeScreen({
                 <button
                   type="button"
                   onClick={onOpenActivation}
-                  className="w-full md:w-auto px-7 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-2xl shadow-md transition flex items-center justify-center gap-2"
+                  className="w-full md:w-auto px-7 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-2xl shadow-md transition flex items-center justify-center gap-2"
                 >
-                  <span>🔒 Unlock AI Tutor Access</span>
+                  <span>💳 Unlock AI Tutor via Paystack</span>
                 </button>
                 <p className="text-[10px] text-amber-200/80 text-center md:text-right font-medium">
                   Requires Exam Mode Activation

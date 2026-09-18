@@ -1,1 +1,6 @@
-@import "tailwindcss"
+@import "tailwindcss";
+
+/* Custom helper class for rendering English comprehension passages and context sections */
+.passage-block {
+  @apply bg-slate-50 p-4 rounded-xl mb-4 border-l-4 border-blue-600 font-serif text-sm text-slate-700 leading-relaxed shadow-xs;
+}

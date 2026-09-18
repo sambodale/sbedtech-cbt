@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { fetchAggregateLeaderboard } from '../services/examServices';
+import { useAuth } from '../context/AuthContext';
 
-export default function DashboardView({ userProfile, history = [], onStartWeaknessDrill }) {
+export default function DashboardView({ history = [], onStartWeaknessDrill }) {
+  const { userProfile, currentUser } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
   const [leaders, setLeaders] = useState([]);
@@ -92,7 +94,7 @@ export default function DashboardView({ userProfile, history = [], onStartWeakne
   };
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-6 transition-all duration-300 print:border-none print:shadow-none">
+    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-6 transition-all duration-300 print:border-none print:shadow-none">
       {/* Title Header with Export & Collapse Controls */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-100 pb-4 gap-4">
         <div className="flex items-center gap-3">
@@ -102,16 +104,18 @@ export default function DashboardView({ userProfile, history = [], onStartWeakne
           <div>
             <h2 className="text-lg font-black text-slate-800">Performance Dashboard</h2>
             <p className="text-xs text-slate-500">
-              Candidate: <span className="text-blue-600 font-bold">{userProfile?.fullName || userProfile?.username || 'Candidate'}</span>
+              Candidate: <span className="text-blue-600 font-bold">
+                {userProfile?.fullName || userProfile?.username || currentUser?.email || 'Candidate'}
+              </span>
             </p>
           </div>
         </div>
 
         {/* Action Buttons (Hidden when printing) */}
-        <div className="flex items-center gap-2 print:hidden">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto print:hidden">
           <button
             onClick={handleExportPdf}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition shadow-sm"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition shadow-sm"
             title="Download or Print Performance Report"
           >
             <span>📥 Export PDF Report</span>
@@ -119,7 +123,7 @@ export default function DashboardView({ userProfile, history = [], onStartWeakne
 
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 border border-slate-200 rounded-xl transition shadow-sm"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-600 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 border border-slate-200 rounded-xl transition shadow-sm"
             title={isCollapsed ? "Expand Dashboard" : "Collapse Dashboard"}
           >
             <span>{isCollapsed ? 'Expand View' : 'Collapse View'}</span>
@@ -178,15 +182,15 @@ export default function DashboardView({ userProfile, history = [], onStartWeakne
               <button
                 type="button"
                 onClick={() => onStartWeaknessDrill && onStartWeaknessDrill(weakSubjects[0]?.subject)}
-                className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs rounded-xl shadow transition whitespace-nowrap"
+                className="w-full sm:w-auto px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs rounded-xl shadow transition text-center"
               >
                 🎯 Practice Targeted Drill
               </button>
             </div>
           )}
 
-          {/* SUBJECT ACCURACY BREAKDOWN */}
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
+          {/* SUBJECT ACCURACY BREAKDOWN WITH SCROLL VIEW */}
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-4">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <span>🎯</span> Subject Accuracy Breakdown
             </h3>
@@ -196,7 +200,7 @@ export default function DashboardView({ userProfile, history = [], onStartWeakne
                 No exam attempts recorded yet. Select a subject below to begin your first test!
               </p>
             ) : (
-              <div className="space-y-4">
+              <div className="max-h-[320px] overflow-y-auto pr-2 space-y-4">
                 {subjectMasteryList.map((item) => (
                   <div key={item.subject} className="space-y-1.5">
                     <div className="flex justify-between items-center text-xs font-bold">
@@ -215,11 +219,11 @@ export default function DashboardView({ userProfile, history = [], onStartWeakne
             )}
           </div>
 
-          {/* UTME AGGREGATE LEADERBOARD (COLLAPSIBLE - PLACED AFTER METRICS) */}
+          {/* UTME AGGREGATE LEADERBOARD */}
           <div className="border border-slate-200 rounded-2xl overflow-hidden transition-all bg-slate-50/50 print:hidden">
             <button
               onClick={() => setIsLeaderboardOpen(!isLeaderboardOpen)}
-              className="w-full px-5 py-4 flex justify-between items-center bg-white hover:bg-slate-50 transition-colors text-left"
+              className="w-full px-4 sm:px-5 py-4 flex justify-between items-center bg-white hover:bg-slate-50 transition-colors text-left"
             >
               <div className="flex items-center gap-3">
                 <span className="text-xl">🏆</span>
@@ -244,7 +248,7 @@ export default function DashboardView({ userProfile, history = [], onStartWeakne
             </button>
 
             {isLeaderboardOpen && (
-              <div className="p-4 sm:p-5 border-t border-slate-200 bg-white animate-fadeIn">
+              <div className="p-4 sm:p-5 border-t border-slate-200 bg-white animate-fadeIn max-h-[300px] overflow-y-auto">
                 {loadingLeaders ? (
                   <div className="flex justify-center py-6">
                     <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -255,9 +259,9 @@ export default function DashboardView({ userProfile, history = [], onStartWeakne
                   </p>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-collapse min-w-[300px]">
                       <thead>
-                        <tr className="border-b bg-slate-50 text-[11px] text-slate-500 uppercase tracking-wider">
+                        <tr className="border-b bg-slate-50 text-[11px] text-slate-500 uppercase tracking-wider sticky top-0 bg-white">
                           <th className="p-2.5 font-semibold">Rank</th>
                           <th className="p-2.5 font-semibold">Candidate</th>
                           <th className="p-2.5 font-semibold">Subjects Taken</th>

@@ -17,22 +17,27 @@ export default function SignUpModal({ isOpen, onClose, onSuccess, onSave }) {
     setLoading(true);
 
     try {
+      let user = null;
+
       if (isLogin) {
-        await loginCandidate(email, password);
+        user = await loginCandidate(email, password);
       } else {
-        // Pass fullName and role inside extraData
-        await registerCandidate(email, password, { fullName, role: 'student' });
+        // Registers candidate and saves profile under the "students" collection
+        user = await registerCandidate(email, password, { fullName, role: 'student' });
       }
-      
-      const profileData = { email, fullName };
 
       // Reset form state
       setFullName('');
       setEmail('');
       setPassword('');
 
+      // Pass user data back to parent component if needed
       if (onSave) {
-        onSave(profileData);
+        onSave({ 
+          uid: user?.uid,
+          email: user?.email || email, 
+          fullName: fullName || user?.email?.split('@')[0] || 'Candidate' 
+        });
       }
       
       if (onSuccess) {
@@ -55,6 +60,7 @@ export default function SignUpModal({ isOpen, onClose, onSuccess, onSave }) {
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl relative border border-gray-100">
         <button 
+          type="button"
           onClick={onClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-lg font-bold"
         >
@@ -91,7 +97,7 @@ export default function SignUpModal({ isOpen, onClose, onSuccess, onSave }) {
                 placeholder="e.g. Samuel John"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition text-slate-800"
               />
             </div>
           )}
@@ -106,7 +112,7 @@ export default function SignUpModal({ isOpen, onClose, onSuccess, onSave }) {
               placeholder="candidate@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition"
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition text-slate-800"
             />
           </div>
 
@@ -120,7 +126,7 @@ export default function SignUpModal({ isOpen, onClose, onSuccess, onSave }) {
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition"
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition text-slate-800"
             />
           </div>
 

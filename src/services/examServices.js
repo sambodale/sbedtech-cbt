@@ -10,7 +10,8 @@ import {
   where, 
   orderBy, 
   limit, 
-  Timestamp 
+  Timestamp,
+  updateDoc
 } from 'firebase/firestore';
 
 export async function saveExamResult(userId, userName, resultData) {
@@ -145,10 +146,7 @@ export async function updateAggregateLeaderboard(userId, userName, currentSubjec
       subjectsTaken.push(currentSubject);
     }
 
-    // Check if Use of English is included in their subjects
     const hasEnglish = subjectsTaken.some(s => s.toLowerCase().includes('english'));
-    
-    // Sum total score across their completed subjects (out of 400 total potential)
     const totalScore = Object.values(subjectScores).reduce((a, b) => a + b, 0);
 
     await setDoc(docRef, {
@@ -172,9 +170,9 @@ export async function fetchAggregateLeaderboard() {
   try {
     const q = query(
       collection(db, 'leaderboard_aggregates'),
-      where('hasEnglish', '==', true), // Must include Use of English
-      orderBy('score', 'desc'),         // Highest aggregate score first (out of 400)
-      limit(10)                         // Top 10 aggregate performers
+      where('hasEnglish', '==', true),
+      orderBy('score', 'desc'),
+      limit(10)
     );
 
     const snapshot = await getDocs(q);
@@ -185,5 +183,91 @@ export async function fetchAggregateLeaderboard() {
   } catch (error) {
     console.error("Error fetching aggregate leaderboard:", error);
     return [];
+  }
+}
+
+// 5. Function to verify if a candidate has unlocked paid exam mode
+export async function verifyCandidateExamAccess(userId) {
+  try {
+    const docRef = doc(db, 'students', userId);
+    const docSnap = await getDoc(docRef);
+
+    if (docSnap.exists()) {
+      return Boolean(docSnap.data().isExamModeUnlocked);
+    }
+    return false;
+  } catch (error) {
+    console.error("Error verifying candidate exam access:", error);
+    return false;
+  }
+}
+
+// 6. Admin function to manually confirm payment and generate an exclusive activation pin
+export async function adminConfirmAndGeneratePin(targetUserId) {
+  try {
+    if (!targetUserId) throw new Error("Target user ID is required to generate a pin.");
+
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    const uniquePin = `SBED-EXAM-${randomNum}-${Math.random().toString(36).substring(2, 4).toUpperCase()}`;
+
+    const studentRef = doc(db, 'students', targetUserId);
+    
+    await setDoc(studentRef, {
+      assignedExamPin: uniquePin,
+      examPinStatus: 'unused',
+      paymentStatus: 'confirmed_by_admin', // Admin manually verified payment
+      examActivationStatus: 'pin_assigned',
+      pinAssignedAt: Timestamp.now()
+    }, { merge: true });
+
+    return uniquePin;
+  } catch (error) {
+    console.error("Error confirming payment and generating pin:", error);
+    throw error;
+  }
+}
+
+// 7. Candidate function to verify and claim their assigned activation pin
+export async function verifyAndClaimExamPin(userId, pinInput) {
+  try {
+    if (!pinInput) throw new Error("Please enter an activation pin.");
+    const cleanPin = pinInput.trim().toUpperCase();
+
+    // Query students collection to find the document matching this pin
+    const studentsRef = collection(db, 'students');
+    const q = query(studentsRef, where('assignedExamPin', '==', cleanPin));
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+      throw new Error('Invalid Activation Pin. Please check your code or verify with admin.');
+    }
+
+    const studentDoc = snapshot.docs[0];
+    const studentData = studentDoc.data();
+
+    // Security check: Make sure the pin belongs to this specific user account
+    if (studentDoc.id !== userId) {
+      throw new Error('This Activation Pin is registered to a different candidate account.');
+    }
+
+    if (studentData.examPinStatus === 'used') {
+      throw new Error('This Activation Pin has already been used.');
+    }
+
+    if (studentData.paymentStatus !== 'confirmed_by_admin') {
+      throw new Error('Payment for this pin has not yet been manually confirmed by an administrator.');
+    }
+
+    // Unlock exam mode and mark pin as used
+    await updateDoc(doc(db, 'students', userId), {
+      isExamModeUnlocked: true,
+      examPinStatus: 'used',
+      activatedAt: Timestamp.now()
+    });
+
+    return true;
+  } catch (error) {
+    console.error('Error claiming exam pin:', error);
+    throw error;
   }
 }

@@ -11,11 +11,13 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
+// Initialize Firebase Core
 const app = initializeApp(firebaseConfig);
 
+// Initialize Firebase Auth
 export const auth = getAuth(app);
 
-// Safe initialization with local offline persistence
+// Initialize Firestore with safe offline persistence across tabs
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({
     tabManager: persistentMultipleTabManager()
