@@ -17,6 +17,7 @@ export default function AdminDashboard({ currentUser, userProfile }) {
     setLoading(true);
     try {
       const usersSnapshot = await getDocs(collection(db, 'students'));
+      console.log("Raw Firestore snapshot size:", usersSnapshot.size);
       const users = usersSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       setUsersList(users);
 
@@ -29,9 +30,15 @@ export default function AdminDashboard({ currentUser, userProfile }) {
     }
   };
 
-  const handleToggleUserRole = async (userId, currentRole) => {
-    const newRole = currentRole === 'admin' ? 'student' : 'admin';
+ const handleToggleUserRole = async (userId, currentRole) => {
+    if (currentRole === 'admin') {
+      alert('Security Restriction: Admin accounts cannot be changed to students.');
+      return;
+    }
+
+    const newRole = 'admin';
     try {
+      // Pointing to your actual 'students' collection in Firestore
       await updateDoc(doc(db, 'students', userId), { role: newRole });
       setUsersList(usersList.map(u => u.id === userId ? { ...u, role: newRole } : u));
     } catch (error) {

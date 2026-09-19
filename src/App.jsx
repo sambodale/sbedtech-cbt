@@ -6,11 +6,17 @@ import ExamHistoryModal from './components/ExamHistoryModal';
 import AiTutorModal from './components/AiTutorModal';
 import AdminDashboard from './components/AdminDashboard';
 import PaystackModal from './components/PaystackModal';
-import AdminPinModal from './components/AdminPinModal'; 
+import AdminPinModal from './components/AdminPinModal'; // 🔑 Added Admin Pin Modal import
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase/config';
 import { getUserProfile } from './services/authServices';
-import { saveExamResult, getUserExamHistory, verifyCandidateExamAccess } from './services/examServices';
+import { 
+  saveExamResult, 
+  getUserExamHistory, 
+  unlockStudentExamMode, 
+  verifyCandidateExamAccess, 
+  verifyAndClaimExamPin // 🔑 Added secure PIN verification function import
+} from './services/examServices';
 import { generateTopicQuestions } from './services/aiQuestionGenerator';
 
 const QuestionCard = lazy(() => import('./components/QuestionCard'));
@@ -49,7 +55,7 @@ export default function App() {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showAiTutorModal, setShowAiTutorModal] = useState(false);
   const [showPaystackModal, setShowPaystackModal] = useState(false);
-  const [showPinModal, setShowPinModal] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false); // 🔑 Added Pin Modal state
   
   const [pendingAction, setPendingAction] = useState(null);
   const [activeSubject, setActiveSubject] = useState('');
@@ -306,11 +312,40 @@ export default function App() {
     setShowPaystackModal(true);
   };
 
-  const handlePaymentSuccess = () => {
+  const handlePaymentSuccess = async (reference) => {
     setLocalActivated(true);
     localStorage.setItem('sbedtech_activated', 'true');
+
+    if (currentUser?.uid) {
+      try {
+        await unlockStudentExamMode(currentUser.uid, reference.reference);
+      } catch (err) {
+        console.error("Failed to sync activation status to Firestore:", err);
+      }
+    }
+
     setShowPaystackModal(false);
-    alert("Payment submitted for admin review! Once confirmed, you can enter your activation pin.");
+    alert("Exam Mode successfully unlocked via Paystack! Enjoy full access.");
+  };
+
+  // 🔑 Handler for Secure Pin-based activation verification
+  const handlePinVerified = async (pinValue) => {
+    try {
+      const userId = currentUser?.uid || localUserProfile?.id;
+      
+      if (currentUser?.uid) {
+        // Securely verify and claim the admin-generated pin in Firestore
+        await verifyAndClaimExamPin(currentUser.uid, pinValue);
+      }
+
+      setLocalActivated(true);
+      localStorage.setItem('sbedtech_activated', 'true');
+      setShowPinModal(false);
+      alert("Exam Mode successfully unlocked via Activation Pin!");
+    } catch (err) {
+      console.error("Failed to verify and claim exam pin:", err);
+      alert(err.message || "Invalid or already used Activation Pin.");
+    }
   };
 
   const handleEndExam = async (summaryData) => {
@@ -425,7 +460,7 @@ export default function App() {
             onStartWeaknessDrill={handleStartWeaknessDrill}
             onOpenSignUp={() => setShowSignUp(true)}
             onOpenActivation={handleOpenActivation}
-            onOpenPinActivation={() => setShowPinModal(true)}
+            onOpenPinActivation={() => setShowPinModal(true)} // 🔑 Direct trigger for Pin modal
             onOpenHistory={() => setShowHistoryModal(true)}
             onOpenAiTutor={handleOpenAiTutor}
           />
@@ -498,15 +533,12 @@ export default function App() {
         />
       )}
 
+      {/* 🔑 Admin Pin Modal Component Integration */}
       {showPinModal && (
         <AdminPinModal
           isOpen={showPinModal}
           onClose={() => setShowPinModal(false)}
-          currentUser={currentUser}
-          onPinVerified={() => {
-            setLocalActivated(true);
-            localStorage.setItem('sbedtech_activated', 'true');
-          }}
+          onPinVerified={handlePinVerified}
         />
       )}
     </div>

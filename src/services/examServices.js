@@ -271,3 +271,23 @@ export async function verifyAndClaimExamPin(userId, pinInput) {
     throw error;
   }
 }
+
+// 8. Function to unlock student exam mode directly (used by Paystack and direct sync flows)
+export async function unlockStudentExamMode(userId, paymentReference = 'direct_activation') {
+  try {
+    if (!userId) throw new Error("User ID is required to unlock exam mode.");
+
+    const studentRef = doc(db, 'students', userId);
+    
+    await setDoc(studentRef, {
+      isExamModeUnlocked: true,
+      paymentReference: paymentReference,
+      activatedAt: Timestamp.now()
+    }, { merge: true });
+
+    return true;
+  } catch (error) {
+    console.error("Error unlocking student exam mode:", error);
+    throw error;
+  }
+}
