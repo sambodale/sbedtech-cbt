@@ -65,9 +65,11 @@ export default function CalculatorModal({ isOpen, onClose }) {
   const handleCalculate = () => {
     try {
       const fullExpression = equation + display;
-      // Evaluate basic mathematical expressions safely
-      // eslint-disable-next-line no-eval
-      const result = eval(fullExpression.replace(/×/g, '*').replace(/÷/g, '/'));
+      const sanitizedExpr = fullExpression.replace(/×/g, '*').replace(/÷/g, '/');
+      
+      // Safely evaluate using Function constructor instead of direct eval()
+      const result = Function(`'use strict'; return (${sanitizedExpr})`)();
+      
       setDisplay(String(result));
       setEquation('');
     } catch (error) {
