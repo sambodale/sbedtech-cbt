@@ -446,18 +446,18 @@ export default function App() {
           </div>
         ) : !examStarted ? (
           <HomeScreen
-            userProfile={activeUserProfile}
-            currentUser={currentUser}
-            history={examHistory}
-            isActivated={localActivated}
-            onStartExam={handleStartExam}
-            onStartWeaknessDrill={handleStartWeaknessDrill}
-            onOpenSignUp={() => setShowSignUp(true)}
-            onOpenActivation={handleOpenActivation}
-            onOpenPinActivation={() => setShowPinModal(true)}
-            onOpenHistory={() => setShowHistoryModal(true)}
-            onOpenAiTutor={handleOpenAiTutor}
-          />
+     userProfile={activeUserProfile}
+    currentUser={currentUser}
+     history={examHistory}
+     isActivated={localActivated}
+     onStartExam={handleStartExam}
+     onStartWeaknessDrill={handleStartWeaknessDrill}
+     onOpenSignUp={() => setShowSignUp(true)}
+     onOpenActivation={() => setIsPaystackModalOpen(true)} // Directly triggers your Paystack modal
+     onOpenPinActivation={() => setShowPinModal(true)}     // Triggers your admin pin entry modal
+     onOpenHistory={() => setShowHistoryModal(true)}
+     onOpenAiTutor={handleOpenAiTutor}
+     />
         ) : (
           <Suspense
             fallback={

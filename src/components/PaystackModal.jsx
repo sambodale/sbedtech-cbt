@@ -1,153 +1,110 @@
-import React, { useState } from 'react';
-import { requestExamActivationPin } from '../services/authServices';
-import { verifyAndClaimExamPin } from '../services/examServices';
+import React from 'react';
+import { usePaystackPayment } from 'react-paystack';
 
-export default function PaystackModal({ isOpen, onClose, userEmail, userName, userId, onSuccess }) {
-  // Hooks must run on every render, so they come before the early return below
-  const [enteredPin, setEnteredPin] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [requestSent, setRequestSent] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-
+export default function PaystackModal({ 
+  isOpen, 
+  onClose, 
+  userEmail, 
+  userName, 
+  userId, 
+  onSuccess, 
+  amount = 300000 // Default to ₦3,000 in kobo
+}) {
   if (!isOpen) return null;
 
-  const isLoggedIn = Boolean(userId) && userId !== 'guest_user';
+  // Pull your public key from Vite env
+  const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || 'pk_test_3072de9f1cf99dbfde94a1f33d1d2da5c47ce4a7';
 
-  // Handler for student to request an activation pin
-  const handleRequestPin = async () => {
-    if (!isLoggedIn) {
-      setErrorMessage('Please log in to your account first.');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setErrorMessage('');
-      await requestExamActivationPin(userId, userEmail, userName);
-      setRequestSent(true);
-    } catch (error) {
-      console.error('Error requesting pin:', error);
-      setErrorMessage('Failed to send request. Please try again.');
-    } finally {
-      setLoading(false);
+  const config = {
+    reference: `SBED-${Date.now()}`,
+    email: userEmail || 'candidate@sbedtech.com',
+    amount: amount,
+    publicKey: publicKey,
+    metadata: {
+      custom_fields: [
+        {
+          display_name: "Candidate Name",
+          variable_name: "candidate_name",
+          value: userName || 'N/A'
+        },
+        {
+          display_name: "User ID",
+          variable_name: "user_id",
+          value: userId || 'guest_user'
+        }
+      ]
     }
   };
 
-  // Handler for student to submit and verify the admin-assigned pin
-  const handleVerifyPin = async (e) => {
-    e.preventDefault();
-    if (!enteredPin.trim()) {
-      setErrorMessage('Please enter your activation pin.');
-      return;
-    }
-    if (!isLoggedIn) {
-      setErrorMessage('Please log in to your account first.');
-      return;
-    }
+  const initializePayment = usePaystackPayment(config);
 
-    try {
-      setLoading(true);
-      setErrorMessage('');
-
-      // Throws a clear error message if the pin is invalid, used, unpaid, or the device is taken
-      await verifyAndClaimExamPin(userId, enteredPin);
-
-      alert('Exam Mode successfully unlocked!');
-      if (onSuccess) onSuccess();
-      onClose();
-      window.location.reload(); // Refresh to sync active user profile state
-    } catch (error) {
-      console.error('Error verifying pin:', error);
-      setErrorMessage(error.message || 'An error occurred while verifying your pin.');
-    } finally {
-      setLoading(false);
+  const handlePaystackSuccessAction = (reference) => {
+    console.log('Payment successful. Reference:', reference);
+    if (onSuccess) {
+      onSuccess(reference);
     }
+    onClose();
+  };
+
+  const handlePaystackCloseAction = () => {
+    console.log('Payment modal closed by user.');
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl p-6 md:p-8 shadow-2xl text-slate-100 space-y-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/75 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col p-6 text-center text-white space-y-5">
+        
+        {/* Header Icon */}
+        <div className="mx-auto flex items-center justify-center w-14 h-14 rounded-2xl bg-emerald-500/10 text-emerald-400 text-2xl border border-emerald-500/20 shadow-inner">
+          💳
+        </div>
 
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <div className="w-14 h-14 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-2xl mx-auto flex items-center justify-center text-2xl font-bold shadow-inner">
-            🔑
-          </div>
-          <h2 className="text-xl font-black text-white tracking-wide">Unlock Full Exam Mode</h2>
+        <div className="space-y-1">
+          <h3 className="text-xl font-bold tracking-tight text-white">Unlock Full Exam Mode</h3>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Full Exam Mode (4 subjects, 2 hours fixed timer) requires an admin-generated activation pin.
+            Make a secure online payment of <span className="font-semibold text-emerald-400">₦{amount / 100}</span> via Paystack for instant full access.
           </p>
         </div>
 
-        {/* Status / Request Box */}
-        <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/60 space-y-3">
+        {/* User Details Preview Box */}
+        <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/60 text-left space-y-2">
           <div className="flex justify-between text-xs">
-            <span className="text-slate-400">Candidate Email:</span>
-            <span className="font-medium text-slate-200 truncate max-w-[200px]">{userEmail || 'N/A'}</span>
+            <span className="text-slate-400">Candidate Name:</span>
+            <span className="font-medium text-slate-200 truncate max-w-[180px]">{userName || 'N/A'}</span>
           </div>
-
-          {!requestSent ? (
-            <div className="pt-2 border-t border-slate-700/60 space-y-2">
-              <p className="text-[11px] text-slate-300">Don't have a pin yet? Send a request notification to the admin:</p>
-              <button
-                type="button"
-                disabled={loading}
-                onClick={handleRequestPin}
-                className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition shadow-md"
-              >
-                {loading ? 'Sending Request...' : '📡 Request Activation Pin'}
-              </button>
-            </div>
-          ) : (
-            <div className="p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 text-center font-medium">
-              ✓ Request sent! Contact the admin to receive your pin.
-            </div>
-          )}
+          <div className="flex justify-between text-xs pt-1 border-t border-slate-700/40">
+            <span className="text-slate-400">Billing Email:</span>
+            <span className="font-medium text-slate-200 truncate max-w-[180px]">{userEmail || 'N/A'}</span>
+          </div>
         </div>
 
-        {/* Pin Entry Form */}
-        <form onSubmit={handleVerifyPin} className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-              Enter Activation Pin
-            </label>
-            <input
-              type="text"
-              value={enteredPin}
-              onChange={(e) => setEnteredPin(e.target.value)}
-              placeholder="e.g., SBED-EXAM-XXXX-XX"
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 font-mono uppercase tracking-wider"
-            />
-          </div>
+        {/* Action Buttons */}
+        <div className="flex gap-3 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition text-xs border border-slate-700 shadow-sm"
+          >
+            Cancel
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => {
+              initializePayment({
+                onSuccess: handlePaystackSuccessAction,
+                onClose: handlePaystackCloseAction,
+              });
+            }}
+            className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black transition shadow-lg shadow-emerald-900/20 text-xs flex items-center justify-center gap-2"
+          >
+            Pay Now 🚀
+          </button>
+        </div>
 
-          {errorMessage && (
-            <p className="text-xs text-rose-400 bg-rose-950/40 border border-rose-900/50 p-2.5 rounded-xl font-medium">
-              {errorMessage}
-            </p>
-          )}
-
-          <div className="flex space-x-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl transition text-xs border border-slate-700 shadow-sm"
-            >
-              Cancel
-            </button>
-
-            <button
-              type="submit"
-              disabled={loading || !enteredPin.trim()}
-              className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-black py-3 rounded-xl transition text-xs shadow-lg shadow-emerald-600/20"
-            >
-              {loading ? 'Verifying...' : 'Unlock Exam Mode 🚀'}
-            </button>
-          </div>
-        </form>
-
-        <p className="text-[11px] text-center text-slate-500">
-          Secured Platform • Admin Verification Required
-        </p>
+        <div className="text-[11px] text-slate-500 flex items-center justify-center gap-1.5 pt-1">
+          <span>🔒 Secured by Paystack</span>
+        </div>
 
       </div>
     </div>
