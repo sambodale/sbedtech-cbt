@@ -321,11 +321,20 @@ export default function App() {
   };
 
   const handleOpenActivation = () => {
-    if (!currentUser && !localUserProfile) {
+    // Pins belong to one account, so a logged-in user is required
+    if (!currentUser) {
       setShowSignUp(true);
       return;
     }
     setShowPaystackModal(true);
+  };
+
+  const handleOpenPinActivation = () => {
+    if (!currentUser) {
+      setShowSignUp(true);
+      return;
+    }
+    setShowPinModal(true);
   };
 
   // PaystackModal verifies the pin itself and shows its own success message
@@ -446,18 +455,18 @@ export default function App() {
           </div>
         ) : !examStarted ? (
           <HomeScreen
-     userProfile={activeUserProfile}
-    currentUser={currentUser}
-     history={examHistory}
-     isActivated={localActivated}
-     onStartExam={handleStartExam}
-     onStartWeaknessDrill={handleStartWeaknessDrill}
-     onOpenSignUp={() => setShowSignUp(true)}
-     onOpenActivation={() => setIsPaystackModalOpen(true)} // Directly triggers your Paystack modal
-     onOpenPinActivation={() => setShowPinModal(true)}     // Triggers your admin pin entry modal
-     onOpenHistory={() => setShowHistoryModal(true)}
-     onOpenAiTutor={handleOpenAiTutor}
-     />
+            userProfile={activeUserProfile}
+            currentUser={currentUser}
+            history={examHistory}
+            isActivated={localActivated}
+            onStartExam={handleStartExam}
+            onStartWeaknessDrill={handleStartWeaknessDrill}
+            onOpenSignUp={() => setShowSignUp(true)}
+            onOpenActivation={handleOpenActivation}
+            onOpenPinActivation={handleOpenPinActivation}
+            onOpenHistory={() => setShowHistoryModal(true)}
+            onOpenAiTutor={handleOpenAiTutor}
+          />
         ) : (
           <Suspense
             fallback={
