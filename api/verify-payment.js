@@ -154,9 +154,13 @@ export default async function handler(req, res) {
   } catch (err) {
     const status = err instanceof HttpError ? err.status : 500;
     if (status === 500) console.error('verify-payment error:', err);
+    // TEMPORARY while debugging: show the real reason for unexpected errors.
+    // Once payments work, change this back to a generic message for status 500.
     return res.status(status).json({
       status: 'error',
-      message: status === 500 ? 'Could not verify the payment. Please try again.' : err.message,
+      message: status === 500 && !(err instanceof HttpError)
+        ? `Could not verify the payment (server error: ${err.message})`
+        : err.message,
     });
   }
 }
