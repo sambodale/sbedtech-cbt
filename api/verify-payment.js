@@ -55,8 +55,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    if (!process.env.PAYSTACK_SECRET_KEY || !process.env.FIREBASE_SERVICE_ACCOUNT) {
-      throw new HttpError(500, 'Server is not configured for payment verification.');
+    const missing = ['PAYSTACK_SECRET_KEY', 'FIREBASE_SERVICE_ACCOUNT'].filter(
+      (name) => !process.env[name] || !process.env[name].trim()
+    );
+    if (missing.length) {
+      throw new HttpError(500, `Server is not configured. Missing or empty variable: ${missing.join(', ')}`);
     }
 
     let fb;
