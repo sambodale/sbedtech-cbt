@@ -1,18 +1,20 @@
 import { db } from '../firebase/config';
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  setDoc, 
-  getDoc, 
-  getDocs, 
-  query, 
-  where, 
-  orderBy, 
-  limit, 
+import {
+  collection,
+  doc,
+  addDoc,
+  setDoc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  limit,
   Timestamp,
-  updateDoc
+  serverTimestamp,
+  writeBatch
 } from 'firebase/firestore';
+import { getDeviceId } from './deviceService';
 
 export async function saveExamResult(userId, userName, resultData) {
   try {
@@ -112,9 +114,9 @@ export async function fetchLeaderboard(subjectName) {
     const q = query(
       collection(db, 'leaderboards'),
       where('subject', '==', subjectName),
-      orderBy('score', 'desc'),          
-      orderBy('timeSpentSeconds', 'asc'), 
-      limit(10)                           
+      orderBy('score', 'desc'),
+      orderBy('timeSpentSeconds', 'asc'),
+      limit(10)
     );
 
     const snapshot = await getDocs(q);
@@ -141,7 +143,7 @@ export async function updateAggregateLeaderboard(userId, userName, currentSubjec
     let subjectsTaken = existingDoc.exists() ? existingDoc.data().subjectsTaken || [] : [];
 
     subjectScores[currentSubject] = currentScore;
-    
+
     if (!subjectsTaken.includes(currentSubject)) {
       subjectsTaken.push(currentSubject);
     }
@@ -154,7 +156,7 @@ export async function updateAggregateLeaderboard(userId, userName, currentSubjec
       userName: userName || 'Candidate',
       subjectScores,
       subjectsTaken,
-      score: totalScore, 
+      score: totalScore,
       totalSubjectsCount: subjectsTaken.length,
       hasEnglish,
       updatedAt: Timestamp.now()
@@ -202,7 +204,8 @@ export async function verifyCandidateExamAccess(userId) {
   }
 }
 
-// 6. Admin function to manually confirm payment and generate an exclusive activation pin
+// 6. Admin function to manually confirm payment and generate an exclusive activation pin.
+// Issuing a new pin also lets a candidate re-activate on a new device.
 export async function adminConfirmAndGeneratePin(targetUserId) {
   try {
     if (!targetUserId) throw new Error("Target user ID is required to generate a pin.");
@@ -211,7 +214,7 @@ export async function adminConfirmAndGeneratePin(targetUserId) {
     const uniquePin = `SBED-EXAM-${randomNum}-${Math.random().toString(36).substring(2, 4).toUpperCase()}`;
 
     const studentRef = doc(db, 'students', targetUserId);
-    
+
     await setDoc(studentRef, {
       assignedExamPin: uniquePin,
       examPinStatus: 'unused',
@@ -227,27 +230,21 @@ export async function adminConfirmAndGeneratePin(targetUserId) {
   }
 }
 
-// 7. Candidate function to verify and claim their assigned activation pin
+// 7. Candidate function to verify and claim their assigned activation pin.
+// The pin is claimed together with a device registration in one atomic batch.
 export async function verifyAndClaimExamPin(userId, pinInput) {
   try {
-    if (!pinInput) throw new Error("Please enter an activation pin.");
+    if (!userId) throw new Error('User session not found. Please log in again.');
+    if (!pinInput || !pinInput.trim()) throw new Error('Please enter an activation pin.');
     const cleanPin = pinInput.trim().toUpperCase();
 
-    // Query students collection to find the document matching this pin
-    const studentsRef = collection(db, 'students');
-    const q = query(studentsRef, where('assignedExamPin', '==', cleanPin));
-    const snapshot = await getDocs(q);
+    const studentRef = doc(db, 'students', userId);
+    const studentSnap = await getDoc(studentRef);
+    const studentData = studentSnap.exists() ? studentSnap.data() : null;
 
-    if (snapshot.empty) {
-      throw new Error('Invalid Activation Pin. Please check your code or verify with admin.');
-    }
-
-    const studentDoc = snapshot.docs[0];
-    const studentData = studentDoc.data();
-
-    // Security check: Make sure the pin belongs to this specific user account
-    if (studentDoc.id !== userId) {
-      throw new Error('This Activation Pin is registered to a different candidate account.');
+    // The pin must be the one assigned to this exact account
+    if (!studentData?.assignedExamPin || studentData.assignedExamPin.trim().toUpperCase() !== cleanPin) {
+      throw new Error('Invalid Activation Pin. Please check your code or contact the admin.');
     }
 
     if (studentData.examPinStatus === 'used') {
@@ -255,15 +252,41 @@ export async function verifyAndClaimExamPin(userId, pinInput) {
     }
 
     if (studentData.paymentStatus !== 'confirmed_by_admin') {
-      throw new Error('Payment for this pin has not yet been manually confirmed by an administrator.');
+      throw new Error('Payment for this pin has not yet been confirmed by an administrator.');
     }
 
-    // Unlock exam mode and mark pin as used
-    await updateDoc(doc(db, 'students', userId), {
+    // Register this device to the account
+    const deviceId = getDeviceId();
+    if (!deviceId) {
+      throw new Error('This browser blocks storage, so the device cannot be registered. Please try another browser.');
+    }
+
+    const deviceRef = doc(db, 'devices', deviceId);
+    const deviceSnap = await getDoc(deviceRef);
+    if (deviceSnap.exists() && deviceSnap.data().uid !== userId) {
+      throw new Error('This device is already registered to another account.');
+    }
+
+    const batch = writeBatch(db);
+    batch.update(studentRef, {
       isExamModeUnlocked: true,
       examPinStatus: 'used',
-      activatedAt: Timestamp.now()
+      activatedAt: serverTimestamp(),
+      claimPin: studentData.assignedExamPin,
+      boundDeviceId: deviceId,
     });
+    if (!deviceSnap.exists()) {
+      batch.set(deviceRef, { uid: userId, boundAt: serverTimestamp() });
+    }
+
+    try {
+      await batch.commit();
+    } catch (commitError) {
+      if (commitError.code === 'permission-denied') {
+        throw new Error('The pin could not be claimed. This device may already be registered to another account.');
+      }
+      throw commitError;
+    }
 
     return true;
   } catch (error) {
@@ -272,22 +295,8 @@ export async function verifyAndClaimExamPin(userId, pinInput) {
   }
 }
 
-// 8. Function to unlock student exam mode directly (used by Paystack and direct sync flows)
-export async function unlockStudentExamMode(userId, paymentReference = 'direct_activation') {
-  try {
-    if (!userId) throw new Error("User ID is required to unlock exam mode.");
-
-    const studentRef = doc(db, 'students', userId);
-    
-    await setDoc(studentRef, {
-      isExamModeUnlocked: true,
-      paymentReference: paymentReference,
-      activatedAt: Timestamp.now()
-    }, { merge: true });
-
-    return true;
-  } catch (error) {
-    console.error("Error unlocking student exam mode:", error);
-    throw error;
-  }
+// 8. Direct unlock is disabled. Exam mode can only be unlocked by claiming an admin-issued pin,
+// because the security rules do not allow candidates to change their own unlock status.
+export async function unlockStudentExamMode() {
+  throw new Error('Exam mode can only be unlocked with an activation pin issued by the admin.');
 }

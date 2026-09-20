@@ -1,17 +1,18 @@
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut 
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../firebase/config";
+import { verifyAndClaimExamPin } from './examServices';
 
 // Regex patterns for client-side validation
 const NAME_REGEX = /^[a-zA-Z\s]{2,50}$/;
 
 /**
  * Fetches user profile details from Firestore.
- * @param {string} uid 
+ * @param {string} uid
  */
 export const getUserProfile = async (uid) => {
   if (!uid) return null;
@@ -31,6 +32,7 @@ export const getUserProfile = async (uid) => {
 
 /**
  * Checks if a user profile exists in Firestore and creates one if missing.
+ * The profile always starts as a locked student account.
  * @param {Object} user - Firebase Auth user object
  */
 export const ensureUserProfileExists = async (user) => {
@@ -40,10 +42,14 @@ export const ensureUserProfileExists = async (user) => {
   const docSnap = await getDoc(userRef);
 
   if (!docSnap.exists()) {
+    // The security rules require a name between 2 and 50 characters
+    let name = (user.displayName || user.email?.split("@")[0] || "Candidate").trim().slice(0, 50);
+    if (name.length < 2) name = "Candidate";
+
     await setDoc(userRef, {
       uid: user.uid,
       email: user.email || "",
-      fullName: user.displayName || user.email?.split("@")[0] || "Candidate",
+      fullName: name,
       role: "student",
       isExamModeUnlocked: false,
       createdAt: serverTimestamp(),
@@ -53,13 +59,15 @@ export const ensureUserProfileExists = async (user) => {
 
 /**
  * Registers a new candidate and saves their profile to Firestore.
- * @param {string} email 
- * @param {string} password 
- * @param {Object} extraData - Additional info (fullName, role, etc.)
+ * New accounts are always students. Admin access is granted only by editing the role in Firestore.
+ * @param {string} email
+ * @param {string} password
+ * @param {Object} extraData - Additional info (fullName)
  */
 export const registerCandidate = async (email, password, extraData = {}) => {
   try {
-    if (extraData.fullName && !NAME_REGEX.test(extraData.fullName)) {
+    const fullName = (extraData.fullName || "").trim();
+    if (!NAME_REGEX.test(fullName)) {
       throw new Error("Full name must contain only letters and be between 2 and 50 characters.");
     }
 
@@ -69,8 +77,8 @@ export const registerCandidate = async (email, password, extraData = {}) => {
     await setDoc(doc(db, "students", user.uid), {
       uid: user.uid,
       email: user.email,
-      fullName: extraData.fullName ? extraData.fullName.trim() : "",
-      role: extraData.role || "student",
+      fullName,
+      role: "student",
       isExamModeUnlocked: false,
       createdAt: serverTimestamp(),
     });
@@ -84,8 +92,8 @@ export const registerCandidate = async (email, password, extraData = {}) => {
 
 /**
  * Logs in an existing candidate using Firebase Authentication.
- * @param {string} email 
- * @param {string} password 
+ * @param {string} email
+ * @param {string} password
  */
 export const loginCandidate = async (email, password) => {
   try {
@@ -115,9 +123,9 @@ export const logoutCandidate = async () => {
 
 /**
  * Student requests an activation pin for Exam Mode.
- * @param {string} uid 
- * @param {string} email 
- * @param {string} fullName 
+ * @param {string} uid
+ * @param {string} email
+ * @param {string} fullName
  */
 export const requestExamActivationPin = async (uid, email, fullName) => {
   if (!uid) throw new Error("User ID required for pin request.");
@@ -139,34 +147,14 @@ export const requestExamActivationPin = async (uid, email, fullName) => {
 
 /**
  * Candidate verifies the activation pin provided by the admin.
- * @param {string} uid 
- * @param {string} enteredPin 
+ * Uses the same device-bound claim as the pin modal, and returns true or false.
+ * @param {string} uid
+ * @param {string} enteredPin
  */
 export const verifyExamActivationPin = async (uid, enteredPin) => {
   if (!uid || !enteredPin) return false;
   try {
-    const studentRef = doc(db, "students", uid);
-    const docSnap = await getDoc(studentRef);
-
-    if (!docSnap.exists()) return false;
-
-    const studentData = docSnap.data();
-
-    if (
-      studentData.assignedExamPin && 
-      studentData.assignedExamPin.trim() === enteredPin.trim() && 
-      studentData.examPinStatus !== 'used'
-    ) {
-      await setDoc(studentRef, {
-        isExamModeUnlocked: true,
-        examPinStatus: 'used',
-        activatedAt: serverTimestamp(),
-      }, { merge: true });
-
-      return true;
-    }
-
-    return false;
+    return await verifyAndClaimExamPin(uid, enteredPin);
   } catch (error) {
     console.error("Error verifying exam pin:", error);
     return false;

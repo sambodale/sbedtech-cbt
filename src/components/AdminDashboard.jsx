@@ -149,7 +149,7 @@ export default function AdminDashboard({ currentUser, userProfile }) {
             <h3 className="font-bold text-slate-800 text-base">Quick System Control</h3>
             <p className="text-slate-500 text-xs">Verify candidate payments manually, issue activation pins, and grant Exam Mode permissions.</p>
             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 font-mono">
-              Admin Account: {currentUser?.email || 'bsamgreat1@gmail.com'}
+              Admin Account: {currentUser?.email || 'Administrator'}
             </div>
           </div>
           <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-3">

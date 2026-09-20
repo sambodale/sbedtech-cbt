@@ -1,16 +1,25 @@
 import React, { useState } from 'react';
-import { requestExamActivationPin, verifyExamActivationPin } from '../services/authServices';
+import { requestExamActivationPin } from '../services/authServices';
+import { verifyAndClaimExamPin } from '../services/examServices';
 
 export default function PaystackModal({ isOpen, onClose, userEmail, userName, userId, onSuccess }) {
-  if (!isOpen) return null;
-
+  // Hooks must run on every render, so they come before the early return below
   const [enteredPin, setEnteredPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  if (!isOpen) return null;
+
+  const isLoggedIn = Boolean(userId) && userId !== 'guest_user';
+
   // Handler for student to request an activation pin
   const handleRequestPin = async () => {
+    if (!isLoggedIn) {
+      setErrorMessage('Please log in to your account first.');
+      return;
+    }
+
     try {
       setLoading(true);
       setErrorMessage('');
@@ -31,24 +40,25 @@ export default function PaystackModal({ isOpen, onClose, userEmail, userName, us
       setErrorMessage('Please enter your activation pin.');
       return;
     }
+    if (!isLoggedIn) {
+      setErrorMessage('Please log in to your account first.');
+      return;
+    }
 
     try {
       setLoading(true);
       setErrorMessage('');
-      
-      const isValid = await verifyExamActivationPin(userId, enteredPin);
 
-      if (isValid) {
-        alert('Exam Mode successfully unlocked!');
-        if (onSuccess) onSuccess();
-        onClose();
-        window.location.reload(); // Refresh to sync active user profile state
-      } else {
-        setErrorMessage('Invalid or already used activation pin. Please check your code or contact the admin.');
-      }
+      // Throws a clear error message if the pin is invalid, used, unpaid, or the device is taken
+      await verifyAndClaimExamPin(userId, enteredPin);
+
+      alert('Exam Mode successfully unlocked!');
+      if (onSuccess) onSuccess();
+      onClose();
+      window.location.reload(); // Refresh to sync active user profile state
     } catch (error) {
       console.error('Error verifying pin:', error);
-      setErrorMessage('An error occurred while verifying your pin.');
+      setErrorMessage(error.message || 'An error occurred while verifying your pin.');
     } finally {
       setLoading(false);
     }
@@ -57,7 +67,7 @@ export default function PaystackModal({ isOpen, onClose, userEmail, userName, us
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
       <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl p-6 md:p-8 shadow-2xl text-slate-100 space-y-6">
-        
+
         {/* Header */}
         <div className="text-center space-y-2">
           <div className="w-14 h-14 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-2xl mx-auto flex items-center justify-center text-2xl font-bold shadow-inner">
@@ -124,7 +134,7 @@ export default function PaystackModal({ isOpen, onClose, userEmail, userName, us
             >
               Cancel
             </button>
-            
+
             <button
               type="submit"
               disabled={loading || !enteredPin.trim()}

@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { auth, db } from '../firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+import { getDeviceId } from '../services/deviceService';
 
 const AuthContext = createContext();
 
@@ -36,13 +37,10 @@ export function AuthProvider({ children }) {
     return unsubscribe;
   }, []);
 
-  // Compute activation status checking Firestore data first, with localStorage fallback
-  const localActivationFallback = typeof window !== 'undefined' && localStorage.getItem('sbedtech_activated') === 'true';
-  const isActivated = Boolean(
-    userProfile?.isExamModeUnlocked || 
-    userProfile?.isActivated || 
-    localActivationFallback
-  );
+  // Activation comes only from Firestore, and only on the device it was claimed on
+  const deviceId = getDeviceId();
+  const deviceOk = !userProfile?.boundDeviceId || userProfile.boundDeviceId === deviceId;
+  const isActivated = Boolean(userProfile?.isExamModeUnlocked && deviceOk);
 
   const value = {
     currentUser,
@@ -59,4 +57,5 @@ export function AuthProvider({ children }) {
 }
 
 // Custom hook for easy access across components
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);

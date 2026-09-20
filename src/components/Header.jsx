@@ -1,6 +1,13 @@
 import React from 'react';
 
-export default function Header({ studentName, examType, totalSeconds = 0, userEmail, viewMode, setViewMode }) {
+export default function Header({
+  studentName,
+  examType,
+  totalSeconds = 0,
+  viewMode,
+  setViewMode,
+  isAdmin = false,
+}) {
   // Format totalSeconds into HH:MM:SS or MM:SS
   const formatTime = (seconds) => {
     const hrs = Math.floor(seconds / 3600);
@@ -15,9 +22,6 @@ export default function Header({ studentName, examType, totalSeconds = 0, userEm
     return `${pad(mins)}:${pad(secs)}`;
   };
 
-  // Check if current user is admin (matches your email or profile rule)
-  const isAdmin = userEmail === 'bsamgreat1@gmail.com' || studentName?.toLowerCase().includes('david wale');
-
   return (
     <header className="bg-white border-b border-slate-200 px-6 py-4 flex flex-wrap justify-between items-center shadow-sm gap-4">
       {/* Portal / Exam Title */}
@@ -28,7 +32,7 @@ export default function Header({ studentName, examType, totalSeconds = 0, userEm
       </div>
 
       <div className="flex items-center gap-4">
-        {/* Admin Portal Toggle Button */}
+        {/* Admin Portal Toggle Button (shown only when the Firestore role is admin) */}
         {isAdmin && setViewMode && (
           <button
             onClick={() => setViewMode(viewMode === 'admin' ? 'candidate' : 'admin')}

@@ -6,17 +6,13 @@ import ExamHistoryModal from './components/ExamHistoryModal';
 import AiTutorModal from './components/AiTutorModal';
 import AdminDashboard from './components/AdminDashboard';
 import PaystackModal from './components/PaystackModal';
-import AdminPinModal from './components/AdminPinModal'; // 🔑 Added Admin Pin Modal import
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from './firebase/config';
-import { getUserProfile } from './services/authServices';
-import { 
-  saveExamResult, 
-  getUserExamHistory, 
-  unlockStudentExamMode, 
-  verifyCandidateExamAccess, 
-  verifyAndClaimExamPin // 🔑 Added secure PIN verification function import
-} from './services/examServices';
+import AdminPinModal from './components/AdminPinModal';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from './firebase/config';
+import { getUserProfile, ensureUserProfileExists } from './services/authServices';
+import { getDeviceId } from './services/deviceService';
+import { saveExamResult, getUserExamHistory } from './services/examServices';
 import { generateTopicQuestions } from './services/aiQuestionGenerator';
 
 const QuestionCard = lazy(() => import('./components/QuestionCard'));
@@ -50,20 +46,20 @@ export default function App() {
 
   const [localUserProfile, setLocalUserProfile] = useState(null);
   const [localActivated, setLocalActivated] = useState(false);
-  
+
   const [showSignUp, setShowSignUp] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showAiTutorModal, setShowAiTutorModal] = useState(false);
   const [showPaystackModal, setShowPaystackModal] = useState(false);
-  const [showPinModal, setShowPinModal] = useState(false); // 🔑 Added Pin Modal state
-  
+  const [showPinModal, setShowPinModal] = useState(false);
+
   const [pendingAction, setPendingAction] = useState(null);
   const [activeSubject, setActiveSubject] = useState('');
   const [examMode, setExamMode] = useState('practice');
   const [questions, setQuestions] = useState([]);
   const [examStarted, setExamStarted] = useState(false);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
-  
+
   const [examHistory, setExamHistory] = useState([]);
 
   const [timeLeft, setTimeLeft] = useState(null);
@@ -76,17 +72,36 @@ export default function App() {
       setCurrentUser(user);
       if (user) {
         try {
-          const profileData = await getUserProfile(user.uid);
+          // Load the profile, creating a valid one if this account has none yet
+          let profileData = await getUserProfile(user.uid);
+          if (!profileData) {
+            await ensureUserProfileExists(user);
+            profileData = await getUserProfile(user.uid);
+          }
+
+          // Device check: a device activated by one account cannot be used by another
+          const deviceId = getDeviceId();
+          if (deviceId) {
+            const deviceSnap = await getDoc(doc(db, 'devices', deviceId));
+            if (deviceSnap.exists() && deviceSnap.data().uid !== user.uid) {
+              await signOut(auth);
+              alert('This device is registered to another activated account. Please use your own device.');
+              return;
+            }
+          }
+
           setFirebaseProfile(profileData);
 
-          // Check if exam mode is unlocked in Firestore
-          const hasAccess = await verifyCandidateExamAccess(user.uid);
-          if (hasAccess) setLocalActivated(true);
+          // Exam mode is active only if unlocked in Firestore and bound to this device
+          const unlocked = Boolean(profileData?.isExamModeUnlocked);
+          const deviceOk = !profileData?.boundDeviceId || profileData.boundDeviceId === deviceId;
+          setLocalActivated(unlocked && deviceOk);
         } catch (error) {
-          console.error("Error loading user profile:", error);
+          console.error('Error loading user profile:', error);
         }
       } else {
         setFirebaseProfile(null);
+        setLocalActivated(false);
       }
       setLoadingAuth(false);
     });
@@ -94,20 +109,21 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  const activeUserProfile = currentUser 
+  const activeUserProfile = currentUser
     ? { email: currentUser.email, ...firebaseProfile }
     : localUserProfile;
+
+  // Admin status comes from the same Firestore field that the security rules check
+  const isAdmin = firebaseProfile?.role === 'admin';
 
   useEffect(() => {
     const loadUserData = async () => {
       const savedUser = localStorage.getItem('sbedtech_user');
-      const savedActivation = localStorage.getItem('sbedtech_activated');
       const savedHistory = localStorage.getItem('sbedtech_history');
 
       if (savedUser) {
         try { setLocalUserProfile(JSON.parse(savedUser)); } catch (e) { console.error(e); }
       }
-      if (savedActivation === 'true') { setLocalActivated(true); }
 
       if (currentUser) {
         try {
@@ -131,7 +147,7 @@ export default function App() {
 
     if (timeLeft <= 0) {
       setIsTimerRunning(false);
-      
+
       if (submitExamRef.current) {
         submitExamRef.current();
       } else {
@@ -146,7 +162,7 @@ export default function App() {
 
     return () => clearInterval(interval);
   }, [isTimerRunning, timeLeft, questions]);
-   
+
   const handleSaveProfile = (profileData) => {
     setLocalUserProfile(profileData);
     localStorage.setItem('sbedtech_user', JSON.stringify(profileData));
@@ -312,40 +328,18 @@ export default function App() {
     setShowPaystackModal(true);
   };
 
-  const handlePaymentSuccess = async (reference) => {
+  // PaystackModal verifies the pin itself and shows its own success message
+  const handlePaymentSuccess = () => {
     setLocalActivated(true);
-    localStorage.setItem('sbedtech_activated', 'true');
-
-    if (currentUser?.uid) {
-      try {
-        await unlockStudentExamMode(currentUser.uid, reference.reference);
-      } catch (err) {
-        console.error("Failed to sync activation status to Firestore:", err);
-      }
-    }
-
     setShowPaystackModal(false);
-    alert("Exam Mode successfully unlocked via Paystack! Enjoy full access.");
   };
 
-  // 🔑 Handler for Secure Pin-based activation verification
-  const handlePinVerified = async (pinValue) => {
-    try {
-      const userId = currentUser?.uid || localUserProfile?.id;
-      
-      if (currentUser?.uid) {
-        // Securely verify and claim the admin-generated pin in Firestore
-        await verifyAndClaimExamPin(currentUser.uid, pinValue);
-      }
-
-      setLocalActivated(true);
-      localStorage.setItem('sbedtech_activated', 'true');
-      setShowPinModal(false);
-      alert("Exam Mode successfully unlocked via Activation Pin!");
-    } catch (err) {
-      console.error("Failed to verify and claim exam pin:", err);
-      alert(err.message || "Invalid or already used Activation Pin.");
-    }
+  // AdminPinModal has already verified and claimed the pin before calling this
+  const handlePinVerified = () => {
+    setLocalActivated(true);
+    setShowPinModal(false);
+    alert('Exam Mode successfully unlocked via Activation Pin!');
+    window.location.reload(); // Refresh so every part of the app sees the new activation
   };
 
   const handleEndExam = async (summaryData) => {
@@ -370,7 +364,7 @@ export default function App() {
       if (currentUser?.uid) {
         try {
           await saveExamResult(
-            currentUser.uid, 
+            currentUser.uid,
             getCandidateName(),
             {
               subject: activeSubject,
@@ -383,7 +377,7 @@ export default function App() {
             }
           );
         } catch (err) {
-          console.error("Failed to sync result to Firestore:", err);
+          console.error('Failed to sync result to Firestore:', err);
         }
       }
 
@@ -402,7 +396,7 @@ export default function App() {
     if (activeUserProfile?.fullName) return activeUserProfile.fullName;
     if (activeUserProfile?.username) return activeUserProfile.username;
     if (activeUserProfile?.name) return activeUserProfile.name;
-    
+
     const fullName = `${activeUserProfile?.firstName || ''} ${activeUserProfile?.lastName || ''}`.trim();
     if (fullName) return fullName;
 
@@ -434,14 +428,14 @@ export default function App() {
         studentName={getCandidateName()}
         examType={getExamTypeLabel()}
         totalSeconds={viewMode === 'admin' ? 0 : timeLeft}
-        userEmail={currentUser?.email || activeUserProfile?.email}
         viewMode={viewMode}
         setViewMode={setViewMode}
+        isAdmin={isAdmin}
         onOpenAuth={() => setShowSignUp(true)}
       />
 
       <main className="container mx-auto px-4 py-6">
-        {viewMode === 'admin' ? (
+        {viewMode === 'admin' && isAdmin ? (
           <AdminDashboard currentUser={currentUser} userProfile={activeUserProfile} />
         ) : loadingQuestions ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
@@ -460,7 +454,7 @@ export default function App() {
             onStartWeaknessDrill={handleStartWeaknessDrill}
             onOpenSignUp={() => setShowSignUp(true)}
             onOpenActivation={handleOpenActivation}
-            onOpenPinActivation={() => setShowPinModal(true)} // 🔑 Direct trigger for Pin modal
+            onOpenPinActivation={() => setShowPinModal(true)}
             onOpenHistory={() => setShowHistoryModal(true)}
             onOpenAiTutor={handleOpenAiTutor}
           />
@@ -533,12 +527,12 @@ export default function App() {
         />
       )}
 
-      {/* 🔑 Admin Pin Modal Component Integration */}
       {showPinModal && (
         <AdminPinModal
           isOpen={showPinModal}
           onClose={() => setShowPinModal(false)}
           onPinVerified={handlePinVerified}
+          currentUser={currentUser}
         />
       )}
     </div>
