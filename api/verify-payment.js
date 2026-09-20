@@ -4,17 +4,41 @@
 //   PAYSTACK_SECRET_KEY      your Paystack secret key (sk_test_... or sk_live_...)
 //   FIREBASE_SERVICE_ACCOUNT the full service account JSON from Firebase (paste the whole file)
 
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+// firebase-admin is loaded inside the handler so that any loading problem is reported
+// as a readable message instead of crashing the whole function.
+let firebase = null;
+
+async function loadFirebase() {
+  if (!firebase) {
+    const [appModule, authModule, firestoreModule] = await Promise.all([
+      import('firebase-admin/app'),
+      import('firebase-admin/auth'),
+      import('firebase-admin/firestore'),
+    ]);
+    firebase = {
+      initializeApp: appModule.initializeApp,
+      getApps: appModule.getApps,
+      cert: appModule.cert,
+      getAuth: authModule.getAuth,
+      getFirestore: firestoreModule.getFirestore,
+      FieldValue: firestoreModule.FieldValue,
+    };
+  }
+  return firebase;
+}
 
 // Keep this equal to the amount in PaystackModal (in kobo: 300000 = N3,000)
 const EXPECTED_AMOUNT_KOBO = 300000;
 
-function ensureFirebase() {
-  if (!getApps().length) {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    initializeApp({ credential: cert(serviceAccount) });
+function ensureFirebase(fb) {
+  if (!fb.getApps().length) {
+    let serviceAccount;
+    try {
+      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    } catch {
+      throw new HttpError(500, 'FIREBASE_SERVICE_ACCOUNT is not valid JSON. Paste the whole downloaded file as the value.');
+    }
+    fb.initializeApp({ credential: fb.cert(serviceAccount) });
   }
 }
 
@@ -34,7 +58,15 @@ export default async function handler(req, res) {
     if (!process.env.PAYSTACK_SECRET_KEY || !process.env.FIREBASE_SERVICE_ACCOUNT) {
       throw new HttpError(500, 'Server is not configured for payment verification.');
     }
-    ensureFirebase();
+
+    let fb;
+    try {
+      fb = await loadFirebase();
+    } catch (loadError) {
+      console.error('firebase-admin failed to load:', loadError);
+      throw new HttpError(500, `Server setup problem (firebase-admin): ${loadError.message}`);
+    }
+    ensureFirebase(fb);
 
     // 1. Who is calling? Verify the Firebase login token.
     const authHeader = req.headers.authorization || '';
@@ -43,7 +75,7 @@ export default async function handler(req, res) {
 
     let uid;
     try {
-      uid = (await getAuth().verifyIdToken(idToken)).uid;
+      uid = (await fb.getAuth().verifyIdToken(idToken)).uid;
     } catch {
       throw new HttpError(401, 'Your session expired. Please log in again and retry.');
     }
@@ -79,7 +111,7 @@ export default async function handler(req, res) {
     }
 
     // 5. Unlock, in one transaction: one payment can only be used once, one device only one account.
-    const db = getFirestore();
+    const db = fb.getFirestore();
     const studentRef = db.doc(`students/${uid}`);
     const deviceRef = db.doc(`devices/${deviceId}`);
     const paymentRef = db.doc(`payments/${reference.trim()}`);
@@ -100,10 +132,10 @@ export default async function handler(req, res) {
         uid,
         amount: paystack.data.amount,
         currency: paystack.data.currency,
-        verifiedAt: FieldValue.serverTimestamp(),
+        verifiedAt: fb.FieldValue.serverTimestamp(),
       });
       if (!deviceDoc.exists) {
-        t.set(deviceRef, { uid, boundAt: FieldValue.serverTimestamp() });
+        t.set(deviceRef, { uid, boundAt: fb.FieldValue.serverTimestamp() });
       }
       t.set(
         studentRef,
@@ -112,7 +144,7 @@ export default async function handler(req, res) {
           paymentStatus: 'paid_online',
           paymentReference: reference.trim(),
           boundDeviceId: deviceId,
-          activatedAt: FieldValue.serverTimestamp(),
+          activatedAt: fb.FieldValue.serverTimestamp(),
         },
         { merge: true }
       );
