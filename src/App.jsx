@@ -276,11 +276,21 @@ export default function App() {
         setExamStarted(true);
         return;
       }
-
       throw new Error('Could not generate questions.');
     } catch (error) {
       console.error('Error loading questions:', error);
-      alert(`Could not load questions for ${subject}. Please check your connection and try again.`);
+      const message = error?.message || '';
+      const showServerMessage = [
+        'No questions',
+        'The question service',
+        'Questions are not available',
+      ].some((start) => message.startsWith(start));
+
+      alert(
+        showServerMessage
+          ? message
+          : `Could not load questions for ${subject}. Please check your connection and try again.`
+      );
     } finally {
       setLoadingQuestions(false);
     }
