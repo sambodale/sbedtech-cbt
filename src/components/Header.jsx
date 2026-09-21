@@ -7,6 +7,8 @@ export default function Header({
   viewMode,
   setViewMode,
   isAdmin = false,
+  onOpenAdminLogin,
+  onAdminSignOut,
 }) {
   // Format totalSeconds into HH:MM:SS or MM:SS
   const formatTime = (seconds) => {
@@ -31,8 +33,20 @@ export default function Header({
         </span>
       </div>
 
-      <div className="flex items-center gap-4">
-        {/* Admin Portal Toggle Button (shown only when the Firestore role is admin) */}
+      <div className="flex items-center gap-4 flex-wrap">
+        {/* Admin sign in: shown to everyone who is not signed in as an admin */}
+        {!isAdmin && onOpenAdminLogin && (
+          <button
+            type="button"
+            onClick={onOpenAdminLogin}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 font-semibold text-xs rounded-xl transition"
+          >
+            <span>🔐</span>
+            <span>Admin Login</span>
+          </button>
+        )}
+
+        {/* Admin Portal toggle and sign out: shown only when the Firestore role is admin */}
         {isAdmin && setViewMode && (
           <button
             onClick={() => setViewMode(viewMode === 'admin' ? 'candidate' : 'admin')}
@@ -40,6 +54,17 @@ export default function Header({
           >
             <span>🛠️</span>
             <span>{viewMode === 'admin' ? 'Exit Admin Portal' : 'Admin Portal'}</span>
+          </button>
+        )}
+
+        {isAdmin && onAdminSignOut && (
+          <button
+            type="button"
+            onClick={onAdminSignOut}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold text-xs rounded-xl transition"
+          >
+            <span>🚪</span>
+            <span>Admin Sign Out</span>
           </button>
         )}
 
@@ -53,7 +78,7 @@ export default function Header({
 
         {/* Dynamic Candidate Name */}
         <div className="flex items-center gap-2 bg-slate-100 px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
-          <span className="text-slate-400">Candidate:</span>
+          <span className="text-slate-400">{isAdmin ? 'Admin:' : 'Candidate:'}</span>
           <span className="text-blue-600">{studentName || 'Guest User'}</span>
         </div>
       </div>

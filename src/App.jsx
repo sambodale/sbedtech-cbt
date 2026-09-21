@@ -7,6 +7,7 @@ import AiTutorModal from './components/AiTutorModal';
 import AdminDashboard from './components/AdminDashboard';
 import PaystackModal from './components/PaystackModal';
 import AdminPinModal from './components/AdminPinModal';
+import AdminLoginModal from './components/AdminLoginModal';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from './firebase/config';
@@ -52,6 +53,7 @@ export default function App() {
   const [showAiTutorModal, setShowAiTutorModal] = useState(false);
   const [showPaystackModal, setShowPaystackModal] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
 
   const [pendingAction, setPendingAction] = useState(null);
   const [activeSubject, setActiveSubject] = useState('');
@@ -81,7 +83,7 @@ export default function App() {
 
           // Device check: a device activated by one account cannot be used by another
           const deviceId = getDeviceId();
-          if (deviceId) {
+          if (deviceId && profileData?.role !== 'admin') {
             const deviceSnap = await getDoc(doc(db, 'devices', deviceId));
             if (deviceSnap.exists() && deviceSnap.data().uid !== user.uid) {
               await signOut(auth);
@@ -337,6 +339,23 @@ export default function App() {
     setShowPinModal(true);
   };
 
+  // Admin sign in success: the modal has already confirmed role === 'admin'
+  const handleAdminLoginSuccess = () => {
+    setShowAdminLogin(false);
+    setViewMode('admin');
+  };
+
+  // Admin sign out: end the session and reload so no admin data stays in memory
+  const handleAdminSignOut = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error('Admin sign out failed:', error);
+    }
+    setViewMode('candidate');
+    window.location.reload();
+  };
+
   // PaystackModal verifies the pin itself and shows its own success message
   const handlePaymentSuccess = () => {
     setLocalActivated(true);
@@ -440,6 +459,8 @@ export default function App() {
         viewMode={viewMode}
         setViewMode={setViewMode}
         isAdmin={isAdmin}
+        onOpenAdminLogin={() => setShowAdminLogin(true)}
+        onAdminSignOut={handleAdminSignOut}
         onOpenAuth={() => setShowSignUp(true)}
       />
 
@@ -542,6 +563,14 @@ export default function App() {
           onClose={() => setShowPinModal(false)}
           onPinVerified={handlePinVerified}
           currentUser={currentUser}
+        />
+      )}
+
+      {showAdminLogin && (
+        <AdminLoginModal
+          isOpen={showAdminLogin}
+          onClose={() => setShowAdminLogin(false)}
+          onSuccess={handleAdminLoginSuccess}
         />
       )}
     </div>
