@@ -1,6 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import QuestionPalette from './QuestionPalette';
 import CalculatorModal from './CalculatorModal';
+
+// The calculator doesn't make sense for language or religious-studies papers
+const NO_CALCULATOR_SUBJECTS = [
+  'yoruba',
+  'hausa',
+  'igbo',
+  'christian religious studies (crs)',
+  'crs',
+  'islamic religious studies (irs)',
+  'irs',
+];
 
 export default function QuestionCard({ subject, mode, questions, onEndExam, onSubmitRef }) {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -8,7 +19,7 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [showReview, setShowReview] = useState(false);
   const [examResult, setExamResult] = useState(null);
-  
+
   // Calculator Modal state
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
 
@@ -21,10 +32,90 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
     try {
       const saved = localStorage.getItem(`sbedtech_bookmarks_${subject}`);
       return saved ? JSON.parse(saved) : [];
-    } catch (e) {
+    } catch {
       return [];
     }
   });
+
+  // --- SUBMIT HANDLER (declared first — everything below depends on it) ---
+  const handleSubmitExam = useCallback(() => {
+    if (isSubmitted) return;
+
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
+
+    let score = 0;
+    const detailedSummary = questions.map((q, idx) => {
+      const userAns = (selectedAnswers[idx] || '').toLowerCase().trim();
+      const correctAns = (q.answer || '').toLowerCase().trim();
+      const isCorrect = userAns !== '' && userAns === correctAns;
+
+      if (isCorrect) score += 1;
+
+      return {
+        questionId: q.id || idx,
+        question: q.question || q.questionText || '',
+        imageUrl: q.imageUrl,
+        options: q.options,
+        subjectTag: q.subjectTag || subject,
+        userAnswer: userAns,
+        correctAnswer: correctAns,
+        isCorrect,
+        explanation: q.explanation || 'No detailed explanation provided.',
+      };
+    });
+
+    const currentTime = Date.now();
+    const formattedDate = new Date().toISOString();
+    const percentage = Math.round((score / questions.length) * 100);
+
+    const resultData = {
+      id: currentTime,
+      timestamp: currentTime,
+      date: formattedDate,
+      subject,
+      mode,
+      score,
+      total: questions.length,
+      totalQuestions: questions.length,
+      percentage,
+      userAnswers: selectedAnswers,
+      summary: detailedSummary,
+    };
+
+    const existingHistory = JSON.parse(localStorage.getItem('sbedtech_history') || '[]');
+    localStorage.setItem('sbedtech_history', JSON.stringify([resultData, ...existingHistory]));
+
+    setExamResult(resultData);
+    setIsSubmitted(true);
+
+    if (onEndExam) {
+      onEndExam(resultData);
+    }
+  }, [isSubmitted, questions, selectedAnswers, subject, mode, onEndExam]);
+
+  // --- VIOLATION HANDLER (depends on handleSubmitExam) ---
+  const triggerViolationProtocol = useCallback((reason) => {
+    if (isSubmitted) return;
+    const newCount = tabSwitchCount + 1;
+    setTabSwitchCount(newCount);
+
+    if (newCount >= MAX_ALLOWED_VIOLATIONS) {
+      alert(`${reason} Security limit reached. Your exam is now being submitted automatically.`);
+      handleSubmitExam();
+    } else {
+      alert(`${reason} Warning ${newCount}/${MAX_ALLOWED_VIOLATIONS}: Please remain on the exam tab. Further violations will result in automatic submission!`);
+      try {
+        if (window.innerWidth >= 1024 && !document.fullscreenElement) {
+          document.documentElement.requestFullscreen();
+        }
+      } catch(err) {
+        // fullscreen re-entry can be blocked by the browser; safe to ignore
+        console.log('Fullscreen request skipped or restricted by browser settings.', err);
+      }
+    }
+  }, [isSubmitted, tabSwitchCount, handleSubmitExam]);
 
   // --- SECURE MONITORING: DESKTOP (FULLSCREEN + VISIBILITY) vs MOBILE (VISIBILITY ONLY) ---
   useEffect(() => {
@@ -39,7 +130,7 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
             await document.documentElement.requestFullscreen();
           }
         } catch (err) {
-          console.log('Fullscreen request skipped or restricted by browser settings.');
+          console.log('Fullscreen request skipped or restricted by browser settings.',err);
         }
       }
     };
@@ -53,8 +144,8 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
 
       if (isHidden || isExitedFullscreen) {
         triggerViolationProtocol(
-          isHidden 
-            ? '⚠️ You switched tabs or minimized the browser.' 
+          isHidden
+            ? '⚠️ You switched tabs or minimized the browser.'
             : '⚠️ You exited fullscreen mode.'
         );
       }
@@ -74,27 +165,21 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
         }
       }
     };
-  }, [isSubmitted, mode, tabSwitchCount]);
+  }, [isSubmitted, mode, tabSwitchCount, triggerViolationProtocol]);
 
-  const triggerViolationProtocol = (reason) => {
-    if (isSubmitted) return;
-    const newCount = tabSwitchCount + 1;
-    setTabSwitchCount(newCount);
-
-    if (newCount >= MAX_ALLOWED_VIOLATIONS) {
-      alert(`${reason} Security limit reached. Your exam is now being submitted automatically.`);
-      handleSubmitExam();
-    } else {
-      alert(`${reason} Warning ${newCount}/${MAX_ALLOWED_VIOLATIONS}: Please remain on the exam tab. Further violations will result in automatic submission!`);
-      try {
-        if (window.innerWidth >= 1024 && !document.fullscreenElement) {
-          document.documentElement.requestFullscreen();
-        }
-      } catch (e) {}
+  // --- KEEP onSubmitRef IN SYNC ---
+  useEffect(() => {
+    if (onSubmitRef) {
+      onSubmitRef.current = handleSubmitExam;
     }
-  };
+  }, [onSubmitRef, handleSubmitExam]);
 
   const currentQuestion = questions[currentIndex];
+
+  // The subject actually being answered right now — falls back to the session-level
+  // subject label for single-subject Practice Mode, where questions carry no subjectTag override needed.
+  const activeSubjectLabel = currentQuestion?.subjectTag || subject;
+  const showCalculator = !NO_CALCULATOR_SUBJECTS.includes((activeSubjectLabel || '').toLowerCase().trim());
 
   if (!currentQuestion && !isSubmitted) {
     return (
@@ -111,7 +196,7 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
   }
 
   const optionsObj = currentQuestion?.options || {};
-  const optionEntries = Object.entries(optionsObj).filter(([_, val]) => val && String(val).trim() !== '');
+  const optionEntries = Object.entries(optionsObj).filter(([, val]) => val && String(val).trim() !== '');
 
   const handleSelectOption = (key) => {
     if (isSubmitted) return;
@@ -167,7 +252,7 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
           <h1>SbedTech CBT Study Guide</h1>
           <div class="subtitle">Bookmarked Questions for: ${subject}</div>
           <hr style="border: 0; border-top: 1px solid #cbd5e1; margin-bottom: 20px;" />
-          
+
           ${bookmarkedQuestionsList.map((q, index) => `
             <div class="question-box">
               <div class="q-title">Q${index + 1}: ${q.question}</div>
@@ -194,68 +279,6 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
       printWindow.close();
     }, 500);
   };
-
-  const handleSubmitExam = () => {
-    if (isSubmitted) return;
-
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
-    }
-
-    let score = 0;
-    const detailedSummary = questions.map((q, idx) => {
-      const userAns = (selectedAnswers[idx] || '').toLowerCase().trim();
-      const correctAns = (q.answer || '').toLowerCase().trim();
-      const isCorrect = userAns !== '' && userAns === correctAns;
-
-      if (isCorrect) score += 1;
-
-      return {
-        questionId: q.id || idx,
-        question: q.question || q.questionText || '',
-        imageUrl: q.imageUrl,
-        options: q.options,
-        userAnswer: userAns,
-        correctAnswer: correctAns,
-        isCorrect,
-        explanation: q.explanation || 'No detailed explanation provided.',
-      };
-    });
-
-    const currentTime = Date.now();
-    const formattedDate = new Date().toISOString();
-    const percentage = Math.round((score / questions.length) * 100);
-
-    const resultData = {
-      id: currentTime,
-      timestamp: currentTime,
-      date: formattedDate,
-      subject,
-      mode,
-      score,
-      total: questions.length,
-      totalQuestions: questions.length,
-      percentage,
-      userAnswers: selectedAnswers,
-      summary: detailedSummary,
-    };
-
-    const existingHistory = JSON.parse(localStorage.getItem('sbedtech_history') || '[]');
-    localStorage.setItem('sbedtech_history', JSON.stringify([resultData, ...existingHistory]));
-
-    setExamResult(resultData);
-    setIsSubmitted(true);
-
-    if (onEndExam) {
-      onEndExam(resultData);
-    }
-  };
-
-  useEffect(() => {
-    if (onSubmitRef) {
-      onSubmitRef.current = handleSubmitExam;
-    }
-  }, [selectedAnswers, isSubmitted, questions]);
 
   // --- 1. RESULT SUMMARY SCREEN ---
   if (isSubmitted && !showReview) {
@@ -291,7 +314,7 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
           >
             Check Missed Questions & Explanations
           </button>
-          
+
           {bookmarkedIds.length > 0 && (
             <button
               onClick={handleDownloadBookmarksPdf}
@@ -351,7 +374,7 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
             >
               <div className="flex justify-between items-start gap-2 mb-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Question {index + 1}
+                  Question {index + 1}{item.subjectTag ? ` • ${item.subjectTag}` : ''}
                 </span>
                 <span
                   className={`text-xs px-2.5 py-0.5 rounded-full font-bold uppercase ${
@@ -410,13 +433,13 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
   return (
     <div className="max-w-7xl mx-auto px-4 py-2">
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
-        
+
         {/* Left 3 Columns: Active Question Card Workspace */}
         <div className="lg:col-span-3 bg-white rounded-2xl shadow-lg border border-slate-200 p-6 sm:p-8">
           <div className="flex justify-between items-center border-b pb-4 mb-6">
             <div>
               <span className="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
-                {subject} ({mode})
+                {activeSubjectLabel} ({mode})
               </span>
               <h2 className="text-sm font-semibold text-slate-500 mt-2">
                 Question {currentIndex + 1} of {questions.length}
@@ -424,14 +447,16 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
             </div>
 
             <div className="flex items-center gap-2 flex-wrap justify-end">
-              {/* Built-in Calculator Trigger Button */}
-              <button
-                type="button"
-                onClick={() => setIsCalculatorOpen(true)}
-                className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 transition flex items-center gap-1 shadow-xs"
-              >
-                <span>🧮 Calculator</span>
-              </button>
+              {/* Built-in Calculator Trigger Button — hidden for languages & religious studies */}
+              {showCalculator && (
+                <button
+                  type="button"
+                  onClick={() => setIsCalculatorOpen(true)}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 transition flex items-center gap-1 shadow-xs"
+                >
+                  <span>🧮 Calculator</span>
+                </button>
+              )}
 
               {/* Bookmark Toggle Button */}
               <button
@@ -572,10 +597,12 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
       </div>
 
       {/* Calculator Modal Integration */}
-      <CalculatorModal
-        isOpen={isCalculatorOpen}
-        onClose={() => setIsCalculatorOpen(false)}
-      />
+      {showCalculator && (
+        <CalculatorModal
+          isOpen={isCalculatorOpen}
+          onClose={() => setIsCalculatorOpen(false)}
+        />
+      )}
     </div>
   );
 }
