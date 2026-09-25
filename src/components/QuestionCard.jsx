@@ -11,6 +11,10 @@ const NO_CALCULATOR_SUBJECTS = [
   'crs',
   'islamic religious studies (irs)',
   'irs',
+  'use of english',
+  'english',
+  'literature in english',
+  'literature',
 ];
 
 export default function QuestionCard({ subject, mode, questions, onEndExam, onSubmitRef }) {

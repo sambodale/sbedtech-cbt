@@ -38,6 +38,81 @@ export const JAMB_ENGLISH_NOVELS = {
   '2026': 'The Lekki Headmaster',
 };
 
+// Maps a display subject name to the slug the /api/get-questions endpoint expects
+const SUBJECT_API_SLUGS = {
+  'use of english': 'english',
+  'english': 'english',
+  'mathematics': 'mathematics',
+  'maths': 'mathematics',
+  'physics': 'physics',
+  'chemistry': 'chemistry',
+  'biology': 'biology',
+  'economics': 'economics',
+  'government': 'government',
+  'christian religious studies (crs)': 'crs',
+  'crs': 'crs',
+  'geography': 'geography',
+  'financial accounting': 'accounting',
+  'commerce': 'commerce',
+  'literature in english': 'literature-in-english',
+  'literature': 'literature-in-english',
+  'islamic religious studies (irs)': 'irs',
+  'irs': 'irs',
+  'agricultural science': 'agricultural-science',
+  'agric': 'agricultural-science',
+  'yoruba': 'yoruba',
+  'igbo': 'igbo',
+  'hausa': 'hausa',
+};
+
+const mapSubjectSlug = (subject) => {
+  const raw = (subject || '').toLowerCase().trim();
+  return SUBJECT_API_SLUGS[raw] || raw;
+};
+
+// Normalizes provider question objects into the shape QuestionCard/QuestionPalette expect,
+// applies the correct-novel filter for English comprehension, and tags each question with
+// the subject it belongs to (subjectTag), which QuestionPalette groups by.
+const formatFetchedQuestions = (fetchedQuestions, cleanSubject, year, subjectTag) => {
+  let list = fetchedQuestions;
+
+  if (cleanSubject === 'english' && list && list.length > 0) {
+    const selectedYear = (year === 'Random' || !year) ? '2026' : year;
+    const targetNovel = JAMB_ENGLISH_NOVELS[selectedYear] || 'The Lekki Headmaster';
+
+    list = list.filter((q) => {
+      if (q.category === 'comprehension' || q.passage || q.novel) {
+        if (q.novel) return q.novel.toLowerCase() === targetNovel.toLowerCase();
+        const otherNovels = Object.values(JAMB_ENGLISH_NOVELS).filter((n) => n !== targetNovel);
+        const queryText = (q.question + ' ' + (q.passage || '')).toLowerCase();
+        return !otherNovels.some((other) => queryText.includes(other.toLowerCase()));
+      }
+      return true;
+    });
+  }
+
+  return (list || []).map((q) => {
+    let options = q.option || q.options || {};
+    if (typeof options === 'object' && !Array.isArray(options)) {
+      options = {
+        a: options.a || q.optionA || q.a || '',
+        b: options.b || q.optionB || q.b || '',
+        c: options.c || q.optionC || q.c || '',
+        d: options.d || q.optionD || q.d || '',
+      };
+    }
+    const selectedYear = (year === 'Random' || !year) ? '2026' : year;
+    return {
+      ...q,
+      question: q.question || q.questionText || '',
+      options,
+      answer: q.answer || q.correctAnswer || '',
+      prescribedText: cleanSubject === 'english' ? (JAMB_ENGLISH_NOVELS[selectedYear] || 'The Lekki Headmaster') : null,
+      subjectTag,
+    };
+  });
+};
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [firebaseProfile, setFirebaseProfile] = useState(null);
@@ -184,99 +259,71 @@ export default function App() {
     }
   };
 
-  const fetchExamQuestions = async ({ subject, year, topic, mode, limit, durationInMinutes }) => {
+  // Handles both Exam Mode (params.subjects is an array of exactly 4, English included)
+  // and Practice Mode (params.subject is a single subject string).
+  const fetchExamQuestions = async (params) => {
     setLoadingQuestions(true);
 
-    const subjectMap = {
-      'use of english': 'english',
-      'english': 'english',
-      'mathematics': 'mathematics',
-      'maths': 'mathematics',
-      'physics': 'physics',
-      'chemistry': 'chemistry',
-      'biology': 'biology',
-      'economics': 'economics',
-      'government': 'government',
-      'christian religious studies (crs)': 'crs',
-      'crs': 'crs',
-      'geography': 'geography',
-      'financial accounting': 'accounting',
-      'commerce': 'commerce',
-      'literature in english': 'literature-in-english',
-      'literature': 'literature-in-english',
-      'islamic religious studies (irs)': 'irs',
-      'irs': 'irs',
-      'agricultural science': 'agricultural-science',
-      'agric': 'agricultural-science',
-      'yoruba': 'yoruba',
-      'igbo': 'igbo',
-      'hausa': 'hausa',
-    };
-
-    const rawSubject = (subject || '').toLowerCase().trim();
-    const cleanSubject = subjectMap[rawSubject] || rawSubject;
-
-    setActiveSubject(subject);
-    setExamMode(mode || 'practice');
-
     try {
-      let fetchedQuestions = await generateTopicQuestions({
+      if (params.mode === 'exam' && Array.isArray(params.subjects)) {
+        const { subjects, year, durationInMinutes, limit } = params;
+
+        const results = await Promise.all(
+          subjects.map(async (subjectName) => {
+            const cleanSubject = mapSubjectSlug(subjectName);
+            const fetched = await generateTopicQuestions({
+              subject: cleanSubject,
+              topic: 'General JAMB Syllabus',
+              limit: parseInt(limit, 10) || 40,
+              year: year || '2026',
+              examType: 'UTME',
+            });
+            const formatted = formatFetchedQuestions(fetched, cleanSubject, year, subjectName);
+            return { subjectName, questions: formatted };
+          })
+        );
+
+        const emptySubjects = results.filter((r) => r.questions.length === 0).map((r) => r.subjectName);
+        if (emptySubjects.length > 0) {
+          alert(`Could not load questions for: ${emptySubjects.join(', ')}. Please pick a different subject for those and try again.`);
+          return;
+        }
+
+        const combined = results.flatMap((r) => r.questions);
+
+        setActiveSubject(subjects.join(' • '));
+        setExamMode('exam');
+        setQuestions(combined);
+        setTimeLeft((parseInt(durationInMinutes, 10) || 120) * 60);
+        setIsTimerRunning(true);
+        setExamStarted(true);
+        return;
+      }
+
+      // Practice Mode: single subject
+      const { subject, year, topic, mode, limit, durationInMinutes } = params;
+      const cleanSubject = mapSubjectSlug(subject);
+
+      setActiveSubject(subject);
+      setExamMode(mode || 'practice');
+
+      const fetched = await generateTopicQuestions({
         subject: cleanSubject,
         topic: topic || 'General JAMB Syllabus',
         limit: parseInt(limit, 10) || 20,
         year: year || '2026',
         examType: 'UTME',
       });
+      const formatted = formatFetchedQuestions(fetched, cleanSubject, year, subject);
 
-      if (cleanSubject === 'english' && fetchedQuestions && fetchedQuestions.length > 0) {
-        const selectedYear = (year === 'Random' || !year) ? '2026' : year;
-        const targetNovel = JAMB_ENGLISH_NOVELS[selectedYear] || 'The Lekki Headmaster';
-
-        fetchedQuestions = fetchedQuestions.filter((q) => {
-          if (q.category === 'comprehension' || q.passage || q.novel || (topic && topic.includes('Lekki Headmaster'))) {
-            if (q.novel) return q.novel.toLowerCase() === targetNovel.toLowerCase();
-
-            const otherNovels = Object.values(JAMB_ENGLISH_NOVELS).filter((n) => n !== targetNovel);
-            const queryText = (q.question + ' ' + (q.passage || '')).toLowerCase();
-            return !otherNovels.some((other) => queryText.includes(other.toLowerCase()));
-          }
-          return true;
-        });
+      if (!formatted || formatted.length === 0) {
+        throw new Error('Could not generate questions.');
       }
 
-      if (fetchedQuestions && fetchedQuestions.length > 0) {
-        const formattedQuestions = fetchedQuestions.map((q) => {
-          let options = q.option || q.options || {};
-
-          if (typeof options === 'object' && !Array.isArray(options)) {
-            options = {
-              a: options.a || q.optionA || q.a || '',
-              b: options.b || q.optionB || q.b || '',
-              c: options.c || q.optionC || q.c || '',
-              d: options.d || q.optionD || q.d || '',
-            };
-          }
-
-          const selectedYear = (year === 'Random' || !year) ? '2026' : year;
-
-          return {
-            ...q,
-            question: q.question || q.questionText || '',
-            options,
-            answer: q.answer || q.correctAnswer || '',
-            prescribedText: cleanSubject === 'english' ? (JAMB_ENGLISH_NOVELS[selectedYear] || 'The Lekki Headmaster') : null,
-          };
-        });
-
-        setQuestions(formattedQuestions);
-
-        const totalMinutes = parseInt(durationInMinutes, 10) || 90;
-        setTimeLeft(totalMinutes * 60);
-        setIsTimerRunning(true);
-        setExamStarted(true);
-        return;
-      }
-      throw new Error('Could not generate questions.');
+      setQuestions(formatted);
+      setTimeLeft((parseInt(durationInMinutes, 10) || 90) * 60);
+      setIsTimerRunning(true);
+      setExamStarted(true);
     } catch (error) {
       console.error('Error loading questions:', error);
       const message = error?.message || '';
@@ -289,7 +336,7 @@ export default function App() {
       alert(
         showServerMessage
           ? message
-          : `Could not load questions for ${subject}. Please check your connection and try again.`
+          : 'Could not load questions. Please check your connection and try again.'
       );
     } finally {
       setLoadingQuestions(false);

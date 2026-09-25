@@ -169,6 +169,12 @@ const SUBJECT_TOPICS = {
 
 const EXAM_YEARS = Array.from({ length: 2026 - 2005 + 1 }, (_, i) => (2026 - i).toString());
 
+// Exam Mode always requires exactly this many subjects, with English locked in
+const EXAM_SUBJECT_COUNT = 4;
+const MANDATORY_SUBJECT = 'Use of English';
+const EXAM_DURATION_MINUTES = 120; // Fixed 2 hours, matching real UTME sittings
+const EXAM_QUESTIONS_PER_SUBJECT = 40;
+
 export default function HomeScreen({
   userProfile,
   history = [],
@@ -183,15 +189,18 @@ export default function HomeScreen({
   const [selectedSubject, setSelectedSubject] = useState('');
   const [showSetupPanel, setShowSetupPanel] = useState(false);
 
-  // CBT Setup form states
+  // CBT Setup form states (Practice Mode)
   const [examYearMode, setExamYearMode] = useState('Random Questions');
   const [selectedTopic, setSelectedTopic] = useState('All Topics');
   const [durationHours, setDurationHours] = useState('1');
   const [durationMinutes, setDurationMinutes] = useState('30');
   const [totalQuestions, setTotalQuestions] = useState('40');
-  
+
   // Test Mode toggle (requires activation for 'exam')
   const [testMode, setTestMode] = useState('practice');
+
+  // Exam Mode subject picker: always includes English, up to 4 total
+  const [examSubjects, setExamSubjects] = useState([MANDATORY_SUBJECT]);
 
   const handleSubjectChange = (e) => {
     const subjectName = e.target.value;
@@ -203,43 +212,87 @@ export default function HomeScreen({
     }
   };
 
+  const handleModeChange = (mode) => {
+    setTestMode(mode);
+    if (mode === 'exam') {
+      // Seed the exam subject list with English plus whatever was picked up top
+      setExamSubjects((prev) => {
+        const base = prev.includes(MANDATORY_SUBJECT) ? prev : [MANDATORY_SUBJECT, ...prev];
+        if (selectedSubject && !base.includes(selectedSubject) && base.length < EXAM_SUBJECT_COUNT) {
+          return [...base, selectedSubject];
+        }
+        return base;
+      });
+    }
+  };
+
+  const toggleExamSubject = (name) => {
+    if (name === MANDATORY_SUBJECT) return; // English is locked, cannot be removed
+    setExamSubjects((prev) => {
+      if (prev.includes(name)) {
+        return prev.filter((s) => s !== name);
+      }
+      if (prev.length >= EXAM_SUBJECT_COUNT) return prev; // already at 4, ignore
+      return [...prev, name];
+    });
+  };
+
   const handleLaunchCbt = (e) => {
     e.preventDefault();
-    if (!selectedSubject) return;
-
-    // 🔒 Enforce that Exam Mode requires activation
-    if (testMode === 'exam' && !isActivated) {
-      alert("Official Exam Mode requires an admin-confirmed activation pin or online payment verification.");
-      onOpenPinActivation();
-      return;
-    }
-
-    const hoursInMins = parseInt(durationHours || '0', 10) * 60;
-    const mins = parseInt(durationMinutes || '0', 10);
-    const totalDuration = testMode === 'exam' ? 120 : (hoursInMins + mins || 90);
 
     const cleanYear = examYearMode.includes('Random')
       ? 'Random'
       : examYearMode.replace(/\D/g, '');
 
+    if (testMode === 'exam') {
+      // 🔒 Enforce that Exam Mode requires activation
+      if (!isActivated) {
+        alert('Official Exam Mode requires an admin-confirmed activation pin or online payment verification.');
+        onOpenPinActivation();
+        return;
+      }
+
+      if (examSubjects.length !== EXAM_SUBJECT_COUNT || !examSubjects.includes(MANDATORY_SUBJECT)) {
+        alert(`Please select exactly ${EXAM_SUBJECT_COUNT} subjects for Exam Mode, including Use of English.`);
+        return;
+      }
+
+      onStartExam({
+        mode: 'exam',
+        subjects: examSubjects,
+        year: cleanYear || 'Random',
+        durationInMinutes: EXAM_DURATION_MINUTES,
+        limit: EXAM_QUESTIONS_PER_SUBJECT,
+      });
+      return;
+    }
+
+    // Practice Mode: single subject, as before
+    if (!selectedSubject) return;
+
+    const hoursInMins = parseInt(durationHours || '0', 10) * 60;
+    const mins = parseInt(durationMinutes || '0', 10);
+    const totalDuration = hoursInMins + mins || 90;
+
     onStartExam({
       subject: selectedSubject,
-      mode: testMode,
+      mode: 'practice',
       year: cleanYear || 'Random',
       topic: selectedTopic === 'All Topics' ? '' : selectedTopic,
       durationInMinutes: totalDuration,
-      limit: testMode === 'exam' ? 40 : (parseInt(totalQuestions, 10) || 40),
+      limit: parseInt(totalQuestions, 10) || 40,
     });
   };
 
   const availableTopics = SUBJECT_TOPICS[selectedSubject] || [];
+  const canLaunchExam = examSubjects.length === EXAM_SUBJECT_COUNT;
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto px-4 sm:px-6 font-sans">
-      
+
       {/* 1. TOP HERO SECTION */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        
+
         {/* SBEDTECH CBT PORTAL HEADER CARD */}
         <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm text-center space-y-5 relative z-20 h-full flex flex-col justify-center">
           <div className="space-y-2">
@@ -262,9 +315,9 @@ export default function HomeScreen({
                 👇 Select Subject to Begin Practice
               </option>
               {SUBJECT_LIST.map((sub) => (
-                <option 
-                  key={sub.name} 
-                  value={sub.name} 
+                <option
+                  key={sub.name}
+                  value={sub.name}
                   className="bg-slate-900 text-white font-semibold"
                 >
                   {sub.icon} {sub.name}
@@ -289,7 +342,7 @@ export default function HomeScreen({
           <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-md space-y-5">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-sm font-extrabold text-slate-800">
-                CBT Setup: <span className="text-blue-600">{selectedSubject}</span>
+                CBT Setup{testMode === 'practice' && <>: <span className="text-blue-600">{selectedSubject}</span></>}
               </h3>
               <button
                 onClick={() => setShowSetupPanel(false)}
@@ -301,7 +354,7 @@ export default function HomeScreen({
 
             <form onSubmit={handleLaunchCbt} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                
+
                 {/* Session Mode Selector: Practice vs Official Exam */}
                 <div className="space-y-1 sm:col-span-2 bg-blue-50 p-3 rounded-xl border border-blue-100">
                   <label className="block text-xs font-black text-blue-900 uppercase tracking-wider mb-1.5">
@@ -310,7 +363,7 @@ export default function HomeScreen({
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onClick={() => setTestMode('exam')}
+                      onClick={() => handleModeChange('exam')}
                       className={`py-2 px-3 text-xs font-bold rounded-lg transition ${
                         testMode === 'exam'
                           ? 'bg-emerald-600 text-white shadow'
@@ -321,7 +374,7 @@ export default function HomeScreen({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setTestMode('practice')}
+                      onClick={() => handleModeChange('practice')}
                       className={`py-2 px-3 text-xs font-bold rounded-lg transition ${
                         testMode === 'practice'
                           ? 'bg-blue-600 text-white shadow'
@@ -337,6 +390,61 @@ export default function HomeScreen({
                     </p>
                   )}
                 </div>
+
+                {/* EXAM MODE: 4-subject picker (English locked in) */}
+                {testMode === 'exam' && (
+                  <div className="space-y-1.5 sm:col-span-2 bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-black text-emerald-900 uppercase tracking-wider">
+                        Choose {EXAM_SUBJECT_COUNT} Subjects
+                      </label>
+                      <span
+                        className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                          canLaunchExam ? 'bg-emerald-600 text-white' : 'bg-amber-200 text-amber-900'
+                        }`}
+                      >
+                        {examSubjects.length} / {EXAM_SUBJECT_COUNT} selected
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5 max-h-52 overflow-y-auto pr-1">
+                      {SUBJECT_LIST.map((sub) => {
+                        const isMandatory = sub.name === MANDATORY_SUBJECT;
+                        const isChecked = examSubjects.includes(sub.name);
+                        const isDisabled = isMandatory || (!isChecked && examSubjects.length >= EXAM_SUBJECT_COUNT);
+                        return (
+                          <label
+                            key={sub.name}
+                            className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-semibold border transition ${
+                              isChecked
+                                ? 'bg-emerald-600 text-white border-emerald-600'
+                                : isDisabled
+                                ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 cursor-pointer'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              className="hidden"
+                              checked={isChecked}
+                              disabled={isDisabled}
+                              onChange={() => toggleExamSubject(sub.name)}
+                            />
+                            <span>{sub.icon}</span>
+                            <span className="truncate">
+                              {sub.name}
+                              {isMandatory ? ' (required)' : ''}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {!canLaunchExam && (
+                      <p className="text-[11px] text-amber-700 font-bold">
+                        Pick {EXAM_SUBJECT_COUNT - examSubjects.length} more subject{EXAM_SUBJECT_COUNT - examSubjects.length === 1 ? '' : 's'} to continue.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* Exam Year / Mode */}
                 <div className="space-y-1 sm:col-span-2">
@@ -357,83 +465,95 @@ export default function HomeScreen({
                   </select>
                 </div>
 
-                {/* Topic Selector Filter */}
-                <div className="space-y-1 sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-600">
-                    Filter by Topic (Optional)
-                  </label>
-                  <select
-                    value={selectedTopic}
-                    onChange={(e) => setSelectedTopic(e.target.value)}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="All Topics">📚 All Topics (Full Syllabus)</option>
-                    {availableTopics.map((top) => (
-                      <option key={top} value={top}>
-                        🎯 {top}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {/* Topic Selector Filter (Practice Mode only — a topic filter across 4 subjects doesn't apply) */}
+                {testMode === 'practice' && (
+                  <div className="space-y-1 sm:col-span-2">
+                    <label className="block text-xs font-bold text-slate-600">
+                      Filter by Topic (Optional)
+                    </label>
+                    <select
+                      value={selectedTopic}
+                      onChange={(e) => setSelectedTopic(e.target.value)}
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="All Topics">📚 All Topics (Full Syllabus)</option>
+                      {availableTopics.map((top) => (
+                        <option key={top} value={top}>
+                          🎯 {top}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
-                {/* Duration Hours (Disabled in official exam mode to enforce 2 hours) */}
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-slate-600">
-                    Duration (Hours) {testMode === 'exam' && '(Fixed: 2h)'}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="5"
-                    disabled={testMode === 'exam'}
-                    value={testMode === 'exam' ? 2 : durationHours}
-                    onChange={(e) => setDurationHours(e.target.value)}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                  />
-                </div>
+                {testMode === 'exam' ? (
+                  <div className="space-y-1 sm:col-span-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <p className="text-xs font-bold text-slate-700">
+                      ⏱️ Fixed Duration: 2 Hours &nbsp;•&nbsp; 📝 40 Questions per subject ({EXAM_QUESTIONS_PER_SUBJECT * EXAM_SUBJECT_COUNT} total)
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Duration Hours */}
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-slate-600">
+                        Duration (Hours)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="5"
+                        value={durationHours}
+                        onChange={(e) => setDurationHours(e.target.value)}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
 
-                {/* Duration Minutes */}
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-slate-600">
-                    Duration (Minutes) {testMode === 'exam' && '(Fixed: 0m)'}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="59"
-                    disabled={testMode === 'exam'}
-                    value={testMode === 'exam' ? 0 : durationMinutes}
-                    onChange={(e) => setDurationMinutes(e.target.value)}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                  />
-                </div>
+                    {/* Duration Minutes */}
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-slate-600">
+                        Duration (Minutes)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="59"
+                        value={durationMinutes}
+                        onChange={(e) => setDurationMinutes(e.target.value)}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
 
-                {/* Total Questions */}
-                <div className="space-y-1 sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-600">
-                    Total Questions {testMode === 'exam' && '(Fixed to 40)'}
-                  </label>
-                  <input
-                    type="number"
-                    min="5"
-                    max="100"
-                    disabled={testMode === 'exam'}
-                    value={testMode === 'exam' ? 40 : totalQuestions}
-                    onChange={(e) => setTotalQuestions(e.target.value)}
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                  />
-                </div>
+                    {/* Total Questions */}
+                    <div className="space-y-1 sm:col-span-2">
+                      <label className="block text-xs font-bold text-slate-600">
+                        Total Questions
+                      </label>
+                      <input
+                        type="number"
+                        min="5"
+                        max="100"
+                        value={totalQuestions}
+                        onChange={(e) => setTotalQuestions(e.target.value)}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
 
               <button
                 type="submit"
-                className={`w-full py-3.5 font-extrabold text-sm rounded-2xl shadow-md transition text-white ${
+                disabled={testMode === 'exam' && !canLaunchExam}
+                className={`w-full py-3.5 font-extrabold text-sm rounded-2xl shadow-md transition text-white disabled:opacity-50 disabled:cursor-not-allowed ${
                   testMode === 'exam'
                     ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/25'
                     : 'bg-blue-600 hover:bg-blue-700'
                 }`}
               >
-                {testMode === 'exam' ? '🚀 Launch Official Exam Mode (2 Hours)' : `▶ Start ${selectedSubject} Practice`}
+                {testMode === 'exam'
+                  ? `🚀 Launch ${EXAM_SUBJECT_COUNT}-Subject UTME Mock (2 Hours)`
+                  : `▶ Start ${selectedSubject} Practice`}
               </button>
             </form>
           </div>
@@ -488,7 +608,7 @@ export default function HomeScreen({
       {/* 2. SBEDTECH AI EXPERT TUTOR HYBRID CARD */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 rounded-3xl p-6 sm:p-7 text-white shadow-xl border border-indigo-800/40 relative overflow-hidden">
         <div className="absolute -top-12 -right-12 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-        
+
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
           <div className="space-y-2.5 max-w-xl">
             <div className="flex items-center gap-2.5">
