@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import Header from './components/Header';
 import HomeScreen from './components/HomeScreen';
 import SignUpModal from './components/SignUpModal';
@@ -19,6 +19,7 @@ import { generateTopicQuestions } from './services/aiQuestionGenerator';
 const QuestionCard = lazy(() => import('./components/QuestionCard'));
 
 // JAMB UTME Official Prescribed Reading Texts mapping for Use of English
+// eslint-disable-next-line react-refresh/only-export-components
 export const JAMB_ENGLISH_NOVELS = {
   '2011': 'The Virtuous Woman',
   '2012': 'The Successors',
@@ -70,9 +71,13 @@ const mapSubjectSlug = (subject) => {
   return SUBJECT_API_SLUGS[raw] || raw;
 };
 
+// Real UTME format: English is 60 questions, the other 3 exam subjects are 40 each
+const isEnglishSubject = (subjectName) => (subjectName || '').trim().toLowerCase() === 'use of english';
+const examQuestionCountFor = (subjectName) => (isEnglishSubject(subjectName) ? 60 : 40);
+
 // Normalizes provider question objects into the shape QuestionCard/QuestionPalette expect,
 // applies the correct-novel filter for English comprehension, and tags each question with
-// the subject it belongs to (subjectTag), which QuestionPalette groups by.
+// the subject it belongs to (subjectTag), which QuestionPalette groups and tabs by.
 const formatFetchedQuestions = (fetchedQuestions, cleanSubject, year, subjectTag) => {
   let list = fetchedQuestions;
 
@@ -223,6 +228,7 @@ export default function App() {
     if (!isTimerRunning || timeLeft === null) return;
 
     if (timeLeft <= 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- ending the countdown when it reaches 0 is exactly what this effect synchronizes
       setIsTimerRunning(false);
 
       if (submitExamRef.current) {
@@ -259,14 +265,15 @@ export default function App() {
     }
   };
 
-  // Handles both Exam Mode (params.subjects is an array of exactly 4, English included)
-  // and Practice Mode (params.subject is a single subject string).
+  // Handles both Exam Mode (params.subjects is an array of exactly 4, English included —
+  // English gets 60 questions, the other 3 get 40 each, matching real UTME) and
+  // Practice Mode (params.subject is a single subject string).
   const fetchExamQuestions = async (params) => {
     setLoadingQuestions(true);
 
     try {
       if (params.mode === 'exam' && Array.isArray(params.subjects)) {
-        const { subjects, year, durationInMinutes, limit } = params;
+        const { subjects, year, durationInMinutes } = params;
 
         const results = await Promise.all(
           subjects.map(async (subjectName) => {
@@ -274,7 +281,7 @@ export default function App() {
             const fetched = await generateTopicQuestions({
               subject: cleanSubject,
               topic: 'General JAMB Syllabus',
-              limit: parseInt(limit, 10) || 40,
+              limit: examQuestionCountFor(subjectName),
               year: year || '2026',
               examType: 'UTME',
             });
@@ -289,6 +296,7 @@ export default function App() {
           return;
         }
 
+        // Keep English first, then the other 3 in the order they were picked
         const combined = results.flatMap((r) => r.questions);
 
         setActiveSubject(subjects.join(' • '));
@@ -427,8 +435,11 @@ export default function App() {
     window.location.reload(); // Refresh so every part of the app sees the new activation
   };
 
-  const handleEndExam = async (summaryData) => {
+  // Hoisted as a function declaration (not a const arrow) so the timer effect above,
+  // which can call this before it appears later in the file, always sees it defined.
+  async function handleEndExam(summaryData) {
     if (summaryData) {
+      // eslint-disable-next-line react-hooks/purity -- this runs from a user action (submit/timeout), not during render
       const currentTime = Date.now();
       const formattedDate = new Date().toISOString();
       const totalQ = summaryData.totalQuestions || questions.length || 40;
@@ -475,7 +486,7 @@ export default function App() {
     setQuestions([]);
     setIsTimerRunning(false);
     setTimeLeft(null);
-  };
+  }
 
   const getCandidateName = () => {
     if (activeUserProfile?.fullName) return activeUserProfile.fullName;

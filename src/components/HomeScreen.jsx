@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import DashboardView from './DashboardView';
 
 const SUBJECT_LIST = [
@@ -173,7 +173,9 @@ const EXAM_YEARS = Array.from({ length: 2026 - 2005 + 1 }, (_, i) => (2026 - i).
 const EXAM_SUBJECT_COUNT = 4;
 const MANDATORY_SUBJECT = 'Use of English';
 const EXAM_DURATION_MINUTES = 120; // Fixed 2 hours, matching real UTME sittings
-const EXAM_QUESTIONS_PER_SUBJECT = 40;
+const ENGLISH_EXAM_QUESTIONS = 60; // Real UTME: English is 60 questions
+const OTHER_EXAM_QUESTIONS = 40;   // Real UTME: the other 3 subjects are 40 each
+const EXAM_TOTAL_QUESTIONS = ENGLISH_EXAM_QUESTIONS + OTHER_EXAM_QUESTIONS * (EXAM_SUBJECT_COUNT - 1); // 180
 
 export default function HomeScreen({
   userProfile,
@@ -186,44 +188,43 @@ export default function HomeScreen({
   onOpenHistory,
   onOpenAiTutor,
 }) {
-  const [selectedSubject, setSelectedSubject] = useState('');
-  const [showSetupPanel, setShowSetupPanel] = useState(false);
+  // Whether the CBT setup modal is open, and which mode it's set up for
+  const [showSetupModal, setShowSetupModal] = useState(false);
+  const [testMode, setTestMode] = useState('practice');
 
-  // CBT Setup form states (Practice Mode)
+  // Practice Mode setup state (subject is now chosen inside the modal, not on the home screen)
+  const [selectedSubject, setSelectedSubject] = useState('');
   const [examYearMode, setExamYearMode] = useState('Random Questions');
   const [selectedTopic, setSelectedTopic] = useState('All Topics');
   const [durationHours, setDurationHours] = useState('1');
   const [durationMinutes, setDurationMinutes] = useState('30');
   const [totalQuestions, setTotalQuestions] = useState('40');
 
-  // Test Mode toggle (requires activation for 'exam')
-  const [testMode, setTestMode] = useState('practice');
-
   // Exam Mode subject picker: always includes English, up to 4 total
   const [examSubjects, setExamSubjects] = useState([MANDATORY_SUBJECT]);
+
+  const openPracticeSetup = () => {
+    setTestMode('practice');
+    setSelectedSubject('');
+    setSelectedTopic('All Topics');
+    setShowSetupModal(true);
+  };
+
+  const openExamSetup = () => {
+    if (!isActivated) {
+      alert('Official Exam Mode requires an admin-confirmed activation pin or online payment verification.');
+      onOpenPinActivation();
+      return;
+    }
+    setTestMode('exam');
+    setExamSubjects([MANDATORY_SUBJECT]);
+    setShowSetupModal(true);
+  };
 
   const handleSubjectChange = (e) => {
     const subjectName = e.target.value;
     setSelectedSubject(subjectName);
     setSelectedTopic('All Topics');
-    setTestMode('practice');
-    if (subjectName) {
-      setShowSetupPanel(true);
-    }
-  };
-
-  const handleModeChange = (mode) => {
-    setTestMode(mode);
-    if (mode === 'exam') {
-      // Seed the exam subject list with English plus whatever was picked up top
-      setExamSubjects((prev) => {
-        const base = prev.includes(MANDATORY_SUBJECT) ? prev : [MANDATORY_SUBJECT, ...prev];
-        if (selectedSubject && !base.includes(selectedSubject) && base.length < EXAM_SUBJECT_COUNT) {
-          return [...base, selectedSubject];
-        }
-        return base;
-      });
-    }
   };
 
   const toggleExamSubject = (name) => {
@@ -245,35 +246,29 @@ export default function HomeScreen({
       : examYearMode.replace(/\D/g, '');
 
     if (testMode === 'exam') {
-      // 🔒 Enforce that Exam Mode requires activation
-      if (!isActivated) {
-        alert('Official Exam Mode requires an admin-confirmed activation pin or online payment verification.');
-        onOpenPinActivation();
-        return;
-      }
-
       if (examSubjects.length !== EXAM_SUBJECT_COUNT || !examSubjects.includes(MANDATORY_SUBJECT)) {
         alert(`Please select exactly ${EXAM_SUBJECT_COUNT} subjects for Exam Mode, including Use of English.`);
         return;
       }
 
+      setShowSetupModal(false);
       onStartExam({
         mode: 'exam',
         subjects: examSubjects,
         year: cleanYear || 'Random',
         durationInMinutes: EXAM_DURATION_MINUTES,
-        limit: EXAM_QUESTIONS_PER_SUBJECT,
       });
       return;
     }
 
-    // Practice Mode: single subject, as before
+    // Practice Mode: single subject, chosen inside this modal
     if (!selectedSubject) return;
 
     const hoursInMins = parseInt(durationHours || '0', 10) * 60;
     const mins = parseInt(durationMinutes || '0', 10);
     const totalDuration = hoursInMins + mins || 90;
 
+    setShowSetupModal(false);
     onStartExam({
       subject: selectedSubject,
       mode: 'practice',
@@ -286,6 +281,7 @@ export default function HomeScreen({
 
   const availableTopics = SUBJECT_TOPICS[selectedSubject] || [];
   const canLaunchExam = examSubjects.length === EXAM_SUBJECT_COUNT;
+  const canLaunchPractice = Boolean(selectedSubject);
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto px-4 sm:px-6 font-sans">
@@ -300,30 +296,26 @@ export default function HomeScreen({
               SbedTech CBT Portal
             </h1>
             <p className="text-sm font-medium text-slate-500 max-w-md mx-auto">
-              Welcome back, <span className="font-bold text-slate-800">{userProfile?.fullName || userProfile?.username || userProfile?.email || 'Candidate'}</span>! Select a subject to configure your setup.
+              Welcome back, <span className="font-bold text-slate-800">{userProfile?.fullName || userProfile?.username || userProfile?.email || 'Candidate'}</span>! Choose how you'd like to begin.
             </p>
           </div>
 
-          {/* SUBJECT DROPDOWN SELECTOR */}
-          <div className="relative max-w-md mx-auto w-full">
-            <select
-              value={selectedSubject}
-              onChange={handleSubjectChange}
-              className="w-full py-3.5 px-5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-2xl shadow-md transition cursor-pointer text-center appearance-none focus:outline-none focus:ring-4 focus:ring-blue-300"
+          {/* MODE ENTRY BUTTONS */}
+          <div className="max-w-md mx-auto w-full space-y-2.5">
+            <button
+              type="button"
+              onClick={openPracticeSetup}
+              className="w-full py-3.5 px-5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-2xl shadow-md transition flex items-center justify-center gap-2"
             >
-              <option value="" disabled className="bg-slate-900 text-white">
-                👇 Select Subject to Begin Practice
-              </option>
-              {SUBJECT_LIST.map((sub) => (
-                <option
-                  key={sub.name}
-                  value={sub.name}
-                  className="bg-slate-900 text-white font-semibold"
-                >
-                  {sub.icon} {sub.name}
-                </option>
-              ))}
-            </select>
+              <span>📚 Practice Test</span>
+            </button>
+            <button
+              type="button"
+              onClick={openExamSetup}
+              className="w-full py-3.5 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm rounded-2xl shadow-md transition flex items-center justify-center gap-2"
+            >
+              <span>🚀 Take Live Exam {!isActivated && '🔒'}</span>
+            </button>
           </div>
 
           {/* ATTEMPT HISTORY BUTTON */}
@@ -337,15 +329,64 @@ export default function HomeScreen({
           </div>
         </div>
 
-        {/* CBT SETUP FORM OR ACTION REQUIRED BANNER */}
-        {showSetupPanel && selectedSubject ? (
-          <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-md space-y-5">
+        {/* ACTION REQUIRED BANNER (shown whenever Exam Mode isn't unlocked yet) */}
+        {!isActivated && (
+          <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 sm:p-8 shadow-sm space-y-4 h-full flex flex-col justify-between">
+            <div className="space-y-2">
+              <h4 className="text-xs font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                ⚠️ Action Required: Activate Exam Mode
+              </h4>
+              <p className="text-xs text-amber-800 font-medium">
+                Practice mode is completely free. To unlock official timed mock exams and expert tools, choose your preferred option below:
+              </p>
+            </div>
+
+            <ul className="space-y-2 text-xs text-amber-950 font-semibold">
+              <li className="flex items-center gap-2">
+                <span className="text-emerald-600 font-bold">✓</span> Full timed mock examinations with official JAMB grading algorithms
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-emerald-600 font-bold">✓</span> Access to comprehensive study materials
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="text-emerald-600 font-bold">✓</span> Live AI Tutor / Fully Trained Expert System
+              </li>
+            </ul>
+
+            <div className="space-y-2 pt-2">
+              <button
+                type="button"
+                onClick={onOpenActivation}
+                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-2xl shadow-md transition flex items-center justify-center gap-2"
+              >
+                <span>💳 Pay Online via Paystack</span>
+              </button>
+              <button
+                type="button"
+                onClick={onOpenPinActivation}
+                className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-2xl shadow-sm transition flex items-center justify-center gap-2"
+              >
+                <span>🔑 Enter Activation Pin from Admin</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* CBT SETUP MODAL */}
+      {showSetupModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 sm:p-8 space-y-5">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-sm font-extrabold text-slate-800">
-                CBT Setup{testMode === 'practice' && <>: <span className="text-blue-600">{selectedSubject}</span></>}
+                {testMode === 'exam'
+                  ? 'Live Exam Setup (2 Hours)'
+                  : selectedSubject
+                  ? <>Practice Setup: <span className="text-blue-600">{selectedSubject}</span></>
+                  : 'Practice Test Setup'}
               </h3>
               <button
-                onClick={() => setShowSetupPanel(false)}
+                onClick={() => setShowSetupModal(false)}
                 className="text-xs font-bold text-slate-400 hover:text-slate-600"
               >
                 ✕ Close
@@ -355,41 +396,25 @@ export default function HomeScreen({
             <form onSubmit={handleLaunchCbt} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-                {/* Session Mode Selector: Practice vs Official Exam */}
-                <div className="space-y-1 sm:col-span-2 bg-blue-50 p-3 rounded-xl border border-blue-100">
-                  <label className="block text-xs font-black text-blue-900 uppercase tracking-wider mb-1.5">
-                    Select Session Mode
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleModeChange('exam')}
-                      className={`py-2 px-3 text-xs font-bold rounded-lg transition ${
-                        testMode === 'exam'
-                          ? 'bg-emerald-600 text-white shadow'
-                          : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-                      }`}
+                {testMode === 'practice' && (
+                  <div className="space-y-1 sm:col-span-2">
+                    <label className="block text-xs font-bold text-slate-600">
+                      Subject
+                    </label>
+                    <select
+                      value={selectedSubject}
+                      onChange={handleSubjectChange}
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      🚀 Full Exam Mode {!isActivated && '🔒'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleModeChange('practice')}
-                      className={`py-2 px-3 text-xs font-bold rounded-lg transition ${
-                        testMode === 'practice'
-                          ? 'bg-blue-600 text-white shadow'
-                          : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      📚 Practice Mode (Free)
-                    </button>
+                      <option value="" disabled>👇 Select a subject</option>
+                      {SUBJECT_LIST.map((sub) => (
+                        <option key={sub.name} value={sub.name}>
+                          {sub.icon} {sub.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  {testMode === 'exam' && !isActivated && (
-                    <p className="text-[11px] text-amber-700 font-bold mt-1">
-                      ⚠️ Requires activation pin confirmed by admin after payment.
-                    </p>
-                  )}
-                </div>
+                )}
 
                 {/* EXAM MODE: 4-subject picker (English locked in) */}
                 {testMode === 'exam' && (
@@ -465,36 +490,26 @@ export default function HomeScreen({
                   </select>
                 </div>
 
-                {/* Topic Selector Filter (Practice Mode only — a topic filter across 4 subjects doesn't apply) */}
-                {testMode === 'practice' && (
-                  <div className="space-y-1 sm:col-span-2">
-                    <label className="block text-xs font-bold text-slate-600">
-                      Filter by Topic (Optional)
-                    </label>
-                    <select
-                      value={selectedTopic}
-                      onChange={(e) => setSelectedTopic(e.target.value)}
-                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="All Topics">📚 All Topics (Full Syllabus)</option>
-                      {availableTopics.map((top) => (
-                        <option key={top} value={top}>
-                          🎯 {top}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {testMode === 'exam' ? (
-                  <div className="space-y-1 sm:col-span-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                    <p className="text-xs font-bold text-slate-700">
-                      ⏱️ Fixed Duration: 2 Hours &nbsp;•&nbsp; 📝 40 Questions per subject ({EXAM_QUESTIONS_PER_SUBJECT * EXAM_SUBJECT_COUNT} total)
-                    </p>
-                  </div>
-                ) : (
+                {testMode === 'practice' ? (
                   <>
-                    {/* Duration Hours */}
+                    <div className="space-y-1 sm:col-span-2">
+                      <label className="block text-xs font-bold text-slate-600">
+                        Filter by Topic (Optional)
+                      </label>
+                      <select
+                        value={selectedTopic}
+                        onChange={(e) => setSelectedTopic(e.target.value)}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="All Topics">📚 All Topics (Full Syllabus)</option>
+                        {availableTopics.map((top) => (
+                          <option key={top} value={top}>
+                            🎯 {top}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
                     <div className="space-y-1">
                       <label className="block text-xs font-bold text-slate-600">
                         Duration (Hours)
@@ -509,7 +524,6 @@ export default function HomeScreen({
                       />
                     </div>
 
-                    {/* Duration Minutes */}
                     <div className="space-y-1">
                       <label className="block text-xs font-bold text-slate-600">
                         Duration (Minutes)
@@ -524,7 +538,6 @@ export default function HomeScreen({
                       />
                     </div>
 
-                    {/* Total Questions */}
                     <div className="space-y-1 sm:col-span-2">
                       <label className="block text-xs font-bold text-slate-600">
                         Total Questions
@@ -539,12 +552,18 @@ export default function HomeScreen({
                       />
                     </div>
                   </>
+                ) : (
+                  <div className="space-y-1 sm:col-span-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <p className="text-xs font-bold text-slate-700">
+                      ⏱️ Fixed Duration: 2 Hours &nbsp;•&nbsp; 📝 English: {ENGLISH_EXAM_QUESTIONS} questions, others: {OTHER_EXAM_QUESTIONS} each ({EXAM_TOTAL_QUESTIONS} total)
+                    </p>
+                  </div>
                 )}
               </div>
 
               <button
                 type="submit"
-                disabled={testMode === 'exam' && !canLaunchExam}
+                disabled={testMode === 'exam' ? !canLaunchExam : !canLaunchPractice}
                 className={`w-full py-3.5 font-extrabold text-sm rounded-2xl shadow-md transition text-white disabled:opacity-50 disabled:cursor-not-allowed ${
                   testMode === 'exam'
                     ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/25'
@@ -553,57 +572,14 @@ export default function HomeScreen({
               >
                 {testMode === 'exam'
                   ? `🚀 Launch ${EXAM_SUBJECT_COUNT}-Subject UTME Mock (2 Hours)`
-                  : `▶ Start ${selectedSubject} Practice`}
+                  : selectedSubject
+                  ? `▶ Start ${selectedSubject} Practice`
+                  : '▶ Select a subject to continue'}
               </button>
             </form>
           </div>
-        ) : (
-          !isActivated && (
-            <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 sm:p-8 shadow-sm space-y-4 h-full flex flex-col justify-between">
-              <div className="space-y-2">
-                <h4 className="text-xs font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
-                  ⚠️ Action Required: Activate Exam Mode
-                </h4>
-                <p className="text-xs text-amber-800 font-medium">
-                  Practice mode is completely free. To unlock official timed mock exams and expert tools, choose your preferred option below:
-                </p>
-              </div>
-
-              <ul className="space-y-2 text-xs text-amber-950 font-semibold">
-                <li className="flex items-center gap-2">
-                  <span className="text-emerald-600 font-bold">✓</span> Full timed mock examinations with official JAMB grading algorithms
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="text-emerald-600 font-bold">✓</span> Access to comprehensive study materials
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="text-emerald-600 font-bold">✓</span> Live AI Tutor / Fully Trained Expert System
-                </li>
-              </ul>
-
-              <div className="space-y-2 pt-2">
-                {/* 1. Pay Online via Paystack */}
-                <button
-                  type="button"
-                  onClick={onOpenActivation}
-                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-2xl shadow-md transition flex items-center justify-center gap-2"
-                >
-                  <span>💳 Pay Online via Paystack</span>
-                </button>
-
-                {/* 2. Admin Pin Entry */}
-                <button
-                  type="button"
-                  onClick={onOpenPinActivation}
-                  className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-2xl shadow-sm transition flex items-center justify-center gap-2"
-                >
-                  <span>🔑 Enter Activation Pin from Admin</span>
-                </button>
-              </div>
-            </div>
-          )
-        )}
-      </div>
+        </div>
+      )}
 
       {/* 2. SBEDTECH AI EXPERT TUTOR HYBRID CARD */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 rounded-3xl p-6 sm:p-7 text-white shadow-xl border border-indigo-800/40 relative overflow-hidden">

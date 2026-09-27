@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import QuestionPalette from './QuestionPalette';
 import CalculatorModal from './CalculatorModal';
 
-// The calculator doesn't make sense for language or religious-studies papers
+// The calculator doesn't make sense for language or religious-studies papers, or English/Literature
 const NO_CALCULATOR_SUBJECTS = [
   'yoruba',
   'hausa',
@@ -16,6 +16,12 @@ const NO_CALCULATOR_SUBJECTS = [
   'literature in english',
   'literature',
 ];
+
+// How long (ms) to wait and re-check before treating a visibility/fullscreen blip as a real violation.
+// This filters out momentary, non-cheating causes: browser confirm()/alert() dialogs, some mobile
+// keyboards, and address-bar auto-hide on scroll can all fire these events without the candidate
+// actually leaving the exam tab.
+const VIOLATION_RECHECK_DELAY_MS = 600;
 
 export default function QuestionCard({ subject, mode, questions, onEndExam, onSubmitRef }) {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -41,8 +47,21 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
     }
   });
 
-  // --- SUBMIT HANDLER (declared first — everything below depends on it) ---
-  const handleSubmitExam = useCallback(() => {
+  const currentQuestion = questions[currentIndex];
+
+  // The subject actually being answered right now — for Practice Mode (one subject only)
+  // this just falls back to the session-level subject label.
+  const activeSubjectLabel = currentQuestion?.subjectTag || subject;
+  const showCalculator = !NO_CALCULATOR_SUBJECTS.includes((activeSubjectLabel || '').toLowerCase().trim());
+
+  // Per-subject question numbering (English 1-60, others 1-40 each) instead of one global 1-180 count
+  const subjectQuestionList = questions.filter((q) => (q.subjectTag || subject) === activeSubjectLabel);
+  const positionInSubject = currentQuestion
+    ? subjectQuestionList.findIndex((q) => q === currentQuestion) + 1
+    : 0;
+  const subjectTotal = subjectQuestionList.length;
+
+  function handleSubmitExam() {
     if (isSubmitted) return;
 
     if (document.fullscreenElement) {
@@ -97,10 +116,9 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
     if (onEndExam) {
       onEndExam(resultData);
     }
-  }, [isSubmitted, questions, selectedAnswers, subject, mode, onEndExam]);
+  }
 
-  // --- VIOLATION HANDLER (depends on handleSubmitExam) ---
-  const triggerViolationProtocol = useCallback((reason) => {
+  function triggerViolationProtocol(reason) {
     if (isSubmitted) return;
     const newCount = tabSwitchCount + 1;
     setTabSwitchCount(newCount);
@@ -114,12 +132,11 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
         if (window.innerWidth >= 1024 && !document.fullscreenElement) {
           document.documentElement.requestFullscreen();
         }
-      } catch(err) {
-        // fullscreen re-entry can be blocked by the browser; safe to ignore
-        console.log('Fullscreen request skipped or restricted by browser settings.', err);
+      } catch {
+        // Fullscreen re-entry is best-effort; ignore if the browser blocks it
       }
     }
-  }, [isSubmitted, tabSwitchCount, handleSubmitExam]);
+  }
 
   // --- SECURE MONITORING: DESKTOP (FULLSCREEN + VISIBILITY) vs MOBILE (VISIBILITY ONLY) ---
   useEffect(() => {
@@ -133,57 +150,69 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
           if (!document.fullscreenElement) {
             await document.documentElement.requestFullscreen();
           }
-        } catch (err) {
-          console.log('Fullscreen request skipped or restricted by browser settings.',err);
+        } catch {
+          console.log('Fullscreen request skipped or restricted by browser settings.');
         }
       }
     };
     enterFullscreen();
 
-    const handleSecurityViolation = () => {
+    // A short recheck timer so a single momentary blip (a confirm() dialog, a mobile keyboard,
+    // the address bar hiding on scroll) doesn't get flagged as a real violation.
+    let recheckTimer = null;
+
+    const handleSecurityCheck = () => {
       if (isSubmitted || mode === 'practice') return;
+      if (recheckTimer) clearTimeout(recheckTimer);
 
-      const isHidden = document.hidden;
-      const isExitedFullscreen = isDesktop && !document.fullscreenElement;
+      recheckTimer = setTimeout(() => {
+        if (isSubmitted) return;
 
-      if (isHidden || isExitedFullscreen) {
-        triggerViolationProtocol(
-          isHidden
-            ? '⚠️ You switched tabs or minimized the browser.'
-            : '⚠️ You exited fullscreen mode.'
-        );
-      }
+        // A real tab switch / app switch is the only thing we punish — this stays true
+        // even after the recheck delay if the candidate genuinely left the page.
+        if (document.hidden) {
+          triggerViolationProtocol('⚠️ You switched tabs or minimized the browser.');
+          return;
+        }
+
+        // The tab is still visible. If fullscreen was exited on desktop while still visible,
+        // that's very commonly caused by a browser dialog or an accidental key press — not
+        // proof of leaving the exam — so we just quietly try to re-enter fullscreen instead
+        // of counting it as a violation.
+        if (isDesktop && !document.fullscreenElement) {
+          try {
+            document.documentElement.requestFullscreen().catch(() => {});
+          } catch {
+            // Ignore — some browsers only allow this from a direct user gesture
+          }
+        }
+      }, VIOLATION_RECHECK_DELAY_MS);
     };
 
-    document.addEventListener('visibilitychange', handleSecurityViolation);
+    document.addEventListener('visibilitychange', handleSecurityCheck);
     if (isDesktop) {
-      document.addEventListener('fullscreenchange', handleSecurityViolation);
+      document.addEventListener('fullscreenchange', handleSecurityCheck);
     }
 
     return () => {
-      document.removeEventListener('visibilitychange', handleSecurityViolation);
+      if (recheckTimer) clearTimeout(recheckTimer);
+      document.removeEventListener('visibilitychange', handleSecurityCheck);
       if (isDesktop) {
-        document.removeEventListener('fullscreenchange', handleSecurityViolation);
+        document.removeEventListener('fullscreenchange', handleSecurityCheck);
         if (document.fullscreenElement) {
           document.exitFullscreen().catch(() => {});
         }
       }
     };
-  }, [isSubmitted, mode, tabSwitchCount, triggerViolationProtocol]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSubmitted, mode, tabSwitchCount]);
 
-  // --- KEEP onSubmitRef IN SYNC ---
   useEffect(() => {
     if (onSubmitRef) {
       onSubmitRef.current = handleSubmitExam;
     }
-  }, [onSubmitRef, handleSubmitExam]);
-
-  const currentQuestion = questions[currentIndex];
-
-  // The subject actually being answered right now — falls back to the session-level
-  // subject label for single-subject Practice Mode, where questions carry no subjectTag override needed.
-  const activeSubjectLabel = currentQuestion?.subjectTag || subject;
-  const showCalculator = !NO_CALCULATOR_SUBJECTS.includes((activeSubjectLabel || '').toLowerCase().trim());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAnswers, isSubmitted, questions]);
 
   if (!currentQuestion && !isSubmitted) {
     return (
@@ -256,7 +285,7 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
           <h1>SbedTech CBT Study Guide</h1>
           <div class="subtitle">Bookmarked Questions for: ${subject}</div>
           <hr style="border: 0; border-top: 1px solid #cbd5e1; margin-bottom: 20px;" />
-
+          
           ${bookmarkedQuestionsList.map((q, index) => `
             <div class="question-box">
               <div class="q-title">Q${index + 1}: ${q.question}</div>
@@ -446,12 +475,12 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
                 {activeSubjectLabel} ({mode})
               </span>
               <h2 className="text-sm font-semibold text-slate-500 mt-2">
-                Question {currentIndex + 1} of {questions.length}
+                Question {positionInSubject} of {subjectTotal}
               </h2>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap justify-end">
-              {/* Built-in Calculator Trigger Button — hidden for languages & religious studies */}
+              {/* Built-in Calculator Trigger Button — hidden for languages, religious studies, English & Literature */}
               {showCalculator && (
                 <button
                   type="button"
@@ -576,7 +605,7 @@ export default function QuestionCard({ subject, mode, questions, onEndExam, onSu
           </div>
         </div>
 
-        {/* Right 1 Column: Upgraded Grouped QuestionPalette Component & Submit Button */}
+        {/* Right 1 Column: Grouped QuestionPalette Component & Submit Button */}
         <div className="lg:col-span-1 sticky top-6 space-y-3">
           <QuestionPalette
             questions={questions}
