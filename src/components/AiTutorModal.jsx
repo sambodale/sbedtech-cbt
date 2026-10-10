@@ -76,7 +76,7 @@ export default function AiTutorModal({ isOpen, onClose, userProfile }) {
   const [showTopUp, setShowTopUp] = useState(false);
   const [topUpTier, setTopUpTier] = useState(null);
   const [topUpStatus, setTopUpStatus] = useState('');
-  const topUpReferenceRef = useRef(`SBEDTUTOR-${Date.now()}`);
+  const [topUpReference, setTopUpReference] = useState('');
 
   // --- Load balance once when the tutor opens ---
   useEffect(() => {
@@ -135,8 +135,6 @@ export default function AiTutorModal({ isOpen, onClose, userProfile }) {
     onClose();
   };
 
-  if (!isOpen) return null;
-
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!query.trim() || isThinking) return;
@@ -185,7 +183,7 @@ export default function AiTutorModal({ isOpen, onClose, userProfile }) {
   const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
   const currentTierInfo = topUpTier ? TUTOR_TOPUP_TIERS[topUpTier] : null;
   const topUpConfig = {
-    reference: topUpReferenceRef.current,
+    reference: topUpReference || 'pending',
     email: auth.currentUser?.email || 'candidate@sbedtech.com',
     amount: currentTierInfo ? currentTierInfo.amountKobo : 100,
     publicKey,
@@ -218,26 +216,34 @@ export default function AiTutorModal({ isOpen, onClose, userProfile }) {
     }
   }
 
-  useEffect(() => {
-    if (!topUpTier) return;
+  // Picking a tier just records which one + a fresh payment reference; the actual
+  // Paystack popup is launched from the effect below once both are set.
+  function handleSelectTier(tier) {
     if (!publicKey) {
       setTopUpStatus('Online top-up is not configured yet. Please contact the admin.');
-      setTopUpTier(null);
       return;
     }
-    topUpReferenceRef.current = `SBEDTUTOR-${Date.now()}`;
+    setTopUpStatus('');
+    setTopUpReference(`SBEDTUTOR-${Date.now()}`);
+    setTopUpTier(tier);
+  }
+
+  useEffect(() => {
+    if (!topUpTier || !topUpReference) return;
     initializeTopUp({
       onSuccess: (ref) => {
-        const usedRef = ref?.reference || ref?.trxref || topUpReferenceRef.current;
+        const usedRef = ref?.reference || ref?.trxref || topUpReference;
         verifyTopUp(usedRef, topUpTier);
         setTopUpTier(null);
       },
       onClose: () => setTopUpTier(null),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topUpTier]);
+  }, [topUpTier, topUpReference]);
 
   const approxWordsRemaining = remainingTokens !== null ? Math.round(remainingTokens * WORDS_PER_TOKEN) : null;
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
@@ -325,7 +331,7 @@ export default function AiTutorModal({ isOpen, onClose, userProfile }) {
                 key={key}
                 type="button"
                 disabled={Boolean(topUpTier)}
-                onClick={() => setTopUpTier(key)}
+                onClick={() => handleSelectTier(key)}
                 className="w-full flex items-center justify-between px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-900 transition"
               >
                 <span>{tier.label} — {tier.tokensLabel}</span>
