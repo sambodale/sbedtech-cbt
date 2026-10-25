@@ -155,10 +155,20 @@ export default function AiTutorModal({ isOpen, onClose, userProfile }) {
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error('Please log in again, then retry.');
 
+      // Send the last few turns so Gemini has conversational context (it otherwise
+      // treats every request as a fresh, unrelated question). Drop the hardcoded
+      // welcome message (index 0) — it's UI-only, not a real exchange — and cap how
+      // much history we send to keep each request's token cost bounded.
+      const MAX_HISTORY_TURNS = 10;
+      const history = messages
+        .slice(1)
+        .slice(-MAX_HISTORY_TURNS)
+        .map((m) => ({ role: m.sender === 'ai' ? 'model' : 'user', text: m.text }));
+
       const response = await fetch('/api/ai-tutor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ query: currentQuery, subject: selectedSubject, targetExam }),
+        body: JSON.stringify({ query: currentQuery, subject: selectedSubject, targetExam, history }),
       });
 
       const data = await response.json().catch(() => ({}));

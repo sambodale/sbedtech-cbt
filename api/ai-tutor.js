@@ -109,12 +109,24 @@ export default async function handler(req, res) {
       throw new HttpError(403, 'The AI Expert Tutor requires an activated account.');
     }
 
-    // 2. What are they asking?
-    const { query, subject, targetExam } = req.body || {};
+    // 2. What are they asking, and what's the conversation so far?
+    const { query, subject, targetExam, history } = req.body || {};
     const cleanQuery = typeof query === 'string' ? query.trim().slice(0, 1000) : '';
     const cleanSubject = typeof subject === 'string' && subject.trim() ? subject.trim() : 'Use of English';
     const cleanExam = ['UTME', 'WAEC', 'NECO'].includes(targetExam) ? targetExam : 'UTME';
     if (!cleanQuery) throw new HttpError(400, 'Please type a question first.');
+
+    // History comes from the client's own message list, so it's untrusted input —
+    // re-validate shape/role/length server-side rather than trusting it as-is.
+    // Capped independently of the client's own cap so a tampered request can't
+    // blow past the intended context/cost budget.
+    const MAX_HISTORY_TURNS = 10;
+    const cleanHistory = Array.isArray(history)
+      ? history
+          .filter((turn) => turn && (turn.role === 'user' || turn.role === 'model') && typeof turn.text === 'string' && turn.text.trim())
+          .slice(-MAX_HISTORY_TURNS)
+          .map((turn) => ({ role: turn.role, text: turn.text.trim().slice(0, 1000) }))
+      : [];
 
     // 3. Ask Gemini
     const topicHint = SUBJECT_TOPIC_HINTS[cleanSubject];
@@ -135,7 +147,10 @@ export default async function handler(req, res) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         system_instruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: cleanQuery }] }],
+        contents: [
+          ...cleanHistory.map((turn) => ({ role: turn.role, parts: [{ text: turn.text }] })),
+          { role: 'user', parts: [{ text: cleanQuery }] },
+        ],
         generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS },
       }),
     });
