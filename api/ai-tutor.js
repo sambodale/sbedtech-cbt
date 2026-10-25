@@ -62,19 +62,11 @@ function ensureFirebase(fb) {
     const raw = process.env.FIREBASE_SERVICE_ACCOUNT || '';
     let serviceAccount;
     try {
-      serviceAccount = JSON.parse(raw);
-    } catch (parseErr) {
-      // TEMP DEBUG — remove once FIREBASE_SERVICE_ACCOUNT is confirmed working.
-      // Only logs length + first/last 15 chars, never anything from the middle
-      // (so the private key body is never exposed in logs).
-      console.error('ai-tutor: FIREBASE_SERVICE_ACCOUNT parse failed.', {
-        length: raw.length,
-        head: raw.slice(0, 15),
-        tail: raw.slice(-15),
-        parseError: parseErr.message,
-      });
-      throw new HttpError(500, 'Server setup problem. Please try again later.');
-    }
+  serviceAccount = JSON.parse(raw);
+} catch (parseErr) {
+  console.error('ai-tutor: FIREBASE_SERVICE_ACCOUNT parse failed.', parseErr.message);
+  throw new HttpError(500, 'Server setup problem. Please try again later.');
+}
     fb.initializeApp({ credential: fb.cert(serviceAccount) });
   }
 }
