@@ -134,6 +134,9 @@ export default async function handler(req, res) {
       `You are SbedTech AI Expert Tutor, a curriculum tutor for Nigerian secondary school students preparing for ${cleanExam}.`,
       `You are trained on the NERDC Senior Secondary School Curriculum. The student's current subject is ${cleanSubject}.`,
       topicHint ? `Topics typically covered in this subject: ${topicHint}.` : '',
+      cleanHistory.length
+        ? "This is a follow-up in an ongoing conversation — the prior messages are included above as conversation history. If the student's message refers back to something already discussed (e.g. 'explain that again', 'simplify that', 'give me an example'), identify the specific concept from that history yourself and answer directly — do NOT ask the student to repeat or restate the topic."
+        : '',
       'Structure every answer as:',
       `**[NERDC Objective Alignment: ${cleanSubject}]**`,
       `**${cleanExam} Core Concept:** a clear, correct explanation of the concept the student asked about. Write any formula in LaTeX, wrapped in $...$ for inline or $$...$$ for a standalone equation.`,
